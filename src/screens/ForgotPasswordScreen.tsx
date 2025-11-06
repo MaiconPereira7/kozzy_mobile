@@ -1,4 +1,4 @@
-// src/screens/LoginScreen.tsx
+// src/screens/ForgotPasswordScreen.tsx
 
 import React, { useState } from 'react';
 import {
@@ -14,21 +14,26 @@ import {
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Checkbox from 'expo-checkbox';
 
+// 1. Importa os tipos de navegação
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../routes'; 
+import { RootStackParamList } from '../routes'; // Importa nosso "Mapa"
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+// 2. Define as props desta tela
+type Props = NativeStackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
-const LoginScreen = ({ navigation }: Props) => {
+const ForgotPasswordScreen = ({ navigation }: Props) => {
   const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [lembrar, setLembrar] = useState(false);
 
-  const handleLogin = () => {
-    navigation.replace('App'); 
+  const handleRecover = () => {
+    // Apenas um alerta de simulação por enquanto
+    Alert.alert(
+      'Instruções Enviadas',
+      `Se uma conta com o email ${email} existir, um link de recuperação foi enviado.`,
+      [
+        { text: 'OK', onPress: () => navigation.navigate('Login') }
+      ]
+    );
   };
 
   return (
@@ -47,7 +52,6 @@ const LoginScreen = ({ navigation }: Props) => {
 
           <Text style={styles.label}>E-mail ou usuário</Text>
           <View style={styles.inputContainer}>
-            {/* ... (Input de email) ... */}
             <MaterialCommunityIcons 
               name="account-outline" 
               size={20} 
@@ -56,7 +60,7 @@ const LoginScreen = ({ navigation }: Props) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="digite seu e-mail ou usuário"
+              placeholder="Digite seu e-mail ou usuário"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -64,65 +68,20 @@ const LoginScreen = ({ navigation }: Props) => {
             />
           </View>
 
-          <Text style={styles.label}>Senha</Text>
-          <View style={styles.inputContainer}>
-            {/* ... (Input de senha) ... */}
-            <MaterialCommunityIcons 
-              name="lock-outline" 
-              size={20} 
-              color="#666" 
-              style={styles.icon} 
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Digite sua senha"
-              value={senha}
-              onChangeText={setSenha}
-              secureTextEntry={!mostrarSenha}
-            />
-            <TouchableOpacity onPress={() => setMostrarSenha(!mostrarSenha)}>
-              <MaterialCommunityIcons 
-                name={mostrarSenha ? "eye-off-outline" : "eye-outline"} 
-                size={20} 
-                color="#666" 
-                style={styles.icon} 
-              />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.optionsRow}>
-            <View style={styles.checkboxContainer}>
-              {/* ... (Checkbox) ... */}
-              <Checkbox
-                value={lembrar}
-                onValueChange={setLembrar}
-                color={lembrar ? '#d9534f' : undefined}
-              />
-              <Text style={styles.checkboxLabel}>Lembrar de mim</Text>
-            </View>
-            
-            {/* <<< MUDANÇA >>> Adiciona o onPress para navegar */}
-            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={styles.link}>Recuperar senha</Text>
-            </TouchableOpacity>
-
-          </View>
-
-          <TouchableOpacity style={styles.buttonContainer} onPress={handleLogin}>
-            {/* ... (Botão de Login) ... */}
+          <TouchableOpacity style={styles.buttonContainer} onPress={handleRecover}>
             <LinearGradient
+              // O gradiente do botão de "Recuperar"
               colors={['#ef6e7c', '#d9534f']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>LOGIN</Text>
+              <Text style={styles.buttonText}>RECUPERAR SENHA</Text>
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* Link para Voltar ao Login */}
           <View style={styles.footerContainer}>
-            {/* ... (Link de Registro) ... */}
-            <Text style={styles.footerText}>Não tem uma conta? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.footerLink}>Cadastre-se</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.footerLink}>Voltar para o Login</Text>
             </TouchableOpacity>
           </View>
 
@@ -132,7 +91,7 @@ const LoginScreen = ({ navigation }: Props) => {
   );
 };
 
-// ... (Seus estilos continuam aqui) ...
+// Reutilizamos os mesmos estilos do Login/Registro para consistência
 const styles = StyleSheet.create({
   backgroundGradient: {
     flex: 1,
@@ -180,7 +139,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
     borderRadius: 10,
-    marginBottom: 15,
+    marginBottom: 25, // Mais espaço embaixo do input
     paddingHorizontal: 10,
   },
   icon: {
@@ -191,26 +150,6 @@ const styles = StyleSheet.create({
     height: 50,
     fontSize: 16,
     color: '#333',
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkboxLabel: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#555',
-  },
-  link: {
-    fontSize: 14,
-    color: '#d9534f',
-    fontWeight: 'bold',
   },
   buttonContainer: {
     borderRadius: 10,
@@ -231,10 +170,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 20,
   },
-  footerText: {
-    fontSize: 14,
-    color: '#555',
-  },
   footerLink: {
     fontSize: 14,
     color: '#d9534f',
@@ -242,4 +177,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;
+export default ForgotPasswordScreen;

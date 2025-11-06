@@ -4,36 +4,43 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// 1. Importa TODAS as nossas telas
+// 1. Importa as telas
 import LoginScreen from '../screens/LoginScreen';
-import HomeScreen from '../screens/HomeScreen';
-import RegistrationScreen from '../screens/RegistrationScreen'; // A nova tela
+import RegistrationScreen from '../screens/RegistrationScreen'; 
+import AppDrawer from './AppDrawer';
+// <<< MUDANÇA >>> Importar a nova tela
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
-// 2. Define os "nomes" das nossas rotas (para o TypeScript)
-// (Qualquer tela que for navegar precisa saber deste mapa)
+// 2. <<< MUDANÇA >>> Atualiza o "mapa" de rotas
 export type RootStackParamList = {
   Login: undefined;
-  Home: undefined;
-  Register: undefined; // A nova rota
+  Register: undefined;
+  App: undefined; 
+  ForgotPassword: undefined; // <-- ADICIONA A NOVA ROTA
 };
 
 // 3. Cria o controlador da pilha
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// 4. Este é o componente que define nosso mapa
+// 4. Componente do mapa
 const AppRoutes = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Login" // O app começa no Login
+        initialRouteName="Login"
         screenOptions={{
-          headerShown: false, // Esconde o cabeçalho padrão
+          headerShown: false,
         }}
       >
-        {/* 5. Lista todas as nossas telas */}
+        {/* 5. Telas de Autenticação */}
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Register" component={RegistrationScreen} />
+        
+        {/* <<< MUDANÇA >>> Adiciona a nova tela ao Stack */}
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        
+        {/* 6. Tela do App (que contém o Drawer) */}
+        <Stack.Screen name="App" component={AppDrawer} />
       
       </Stack.Navigator>
     </NavigationContainer>

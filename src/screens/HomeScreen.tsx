@@ -1,3 +1,5 @@
+// src/screens/HomeScreen.tsx
+
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -6,11 +8,19 @@ import {
   TouchableOpacity,
   FlatList,
   SafeAreaView,
+  Modal, // 1. <<< MUDANÇA: Importar Modal
+  Pressable, // 2. <<< MUDANÇA: Importar Pressable (para o botão 'X')
+  ScrollView, // 3. <<< MUDANÇA: Importar ScrollView (para os detalhes)
 } from 'react-native';
 
 // Ícones que vamos usar
 import Feather from 'react-native-vector-icons/Feather';
 import SimpleLineIcons from 'react-native-vector-icons/SimpleLineIcons';
+
+// 4. <<< MUDANÇA >>> Importar os tipos do Drawer
+import { DrawerScreenProps } from '@react-navigation/drawer';
+import { AppDrawerParamList } from '../routes/AppDrawer'; // O tipo que criamos
+import { SafeAreaView as InsetSafeAreaView } from 'react-native-safe-area-context';
 
 // Define o "formato" (shape) de um ticket para o TypeScript
 type Ticket = {
@@ -18,20 +28,39 @@ type Ticket = {
   name: string;
   subject: string;
   type: 'ativo' | 'andamento' | 'fechado';
+  // Adicionando campos extras para o modal (podemos usar mock data)
+  protocol: string;
+  clientType: string;
+  category: string;
+  date: string;
+  time: string;
+  description: string;
 };
 
-// --- Dados Mock (agora "tipado") ---
+// --- Dados Mock (agora com mais detalhes) ---
 const mockTickets: Ticket[] = [
-  { id: '1', name: 'Dareine Roberston', subject: 'Assurto. Pedido #4567 não foi entregue', type: 'ativo' },
-  { id: '2', name: 'Ronald Richards', subject: 'Assurto. Pedido #4567 não foi entregue', type: 'ativo' },
-  { id: '3', name: 'Robert Fox', subject: 'Protocolo: #2778', type: 'ativo' },
-  { id: '4', name: 'Cliente em Atendimento', subject: 'Protocolo: #1001', type: 'andamento' },
-  { id: '5', name: 'Antigo Cliente', subject: 'Problema resolvido', type: 'fechado' },
+  { 
+    id: '1', name: 'Dareine Roberston', subject: 'Pedido #4567 não foi entregue', type: 'ativo',
+    protocol: '10234', clientType: 'Pessoa Física', category: 'Entrega',
+    date: '15/01/2024', time: '14:30', description: 'Problema de conexão com a internet, cliente relatando lentidão. Já foi tentado reiniciar o modem.'
+  },
+  { 
+    id: '2', name: 'Ronald Richards', subject: 'Pedido #4567 não foi entregue', type: 'ativo',
+    protocol: '10235', clientType: 'Pessoa Jurídica', category: 'Suporte Técnico',
+    date: '16/01/2024', time: '09:15', description: 'Cliente informa que o sistema de pedidos está offline.'
+  },
+  { 
+    id: '3', name: 'Robert Fox', subject: 'Protocolo: #2778', type: 'ativo',
+    protocol: '2778', clientType: 'Revendedor', category: 'Financeiro',
+    date: '17/01/2024', time: '11:00', description: 'Dúvida sobre a fatura de Janeiro.'
+  },
+  // ... (outros tickets) ...
 ];
 
-// --- Componente do Card (agora "tipado") ---
-const SupportCard = ({ item }: { item: Ticket }) => (
-  <TouchableOpacity style={styles.card}>
+// --- Componente do Card ---
+// 5. <<< MUDANÇA: Adicionamos a prop 'onPress' >>>
+const SupportCard = ({ item, onPress }: { item: Ticket, onPress: (ticket: Ticket) => void }) => (
+  <TouchableOpacity style={styles.card} onPress={() => onPress(item)}>
     <View style={styles.cardContent}>
       <Text style={styles.cardTitle}>{item.name}</Text>
       <Text style={styles.cardSubtitle}>{item.subject}</Text>
@@ -40,20 +69,34 @@ const SupportCard = ({ item }: { item: Ticket }) => (
   </TouchableOpacity>
 );
 
-// --- Componente Principal da Tela ---
-const HomeScreen = () => {
-  const [activeTab, setActiveTab] = useState('ativos');
+// --- Componente de Linha de Detalhe (para o Modal) ---
+const DetailRow = ({ label, value, isTextArea = false }: { label: string, value: string, isTextArea?: boolean }) => (
+  <View style={styles.detailRowContainer}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <View style={[styles.detailValueContainer, isTextArea && styles.detailValueTextArea]}>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  </View>
+);
 
-  // <<< MUDANÇA: Objeto de configuração para o status dinâmico >>>
-  // Mapeia o estado 'activeTab' para as cores e textos corretos
-  const statusConfig = {
-    ativos: { text: 'Ativo', color: '#e60023' }, // Vermelho
-    andamento: { text: 'Andamento', color: '#f0ad4e' }, // Amarelo/Laranja
-    fechados: { text: 'Fechados', color: '#5cb85c' }, // Verde
-  };
+// --- Props da Tela ---
+type Props = DrawerScreenProps<AppDrawerParamList, 'Home'>;
+
+// --- Componente Principal da Tela ---
+const HomeScreen = ({ navigation }: Props) => {
+  const [activeTab, setActiveTab] = useState('ativos');
   
-  // Pega a configuração atual baseada na aba ativa
-const currentStatus = statusConfig[activeTab as keyof typeof statusConfig];
+  // 6. <<< MUDANÇA: Estados para controlar o Modal >>>
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+
+  // ... (lógica de filtragem continua igual) ...
+  const statusConfig = {
+    ativos: { text: 'Ativo', color: '#e60023' }, 
+    andamento: { text: 'Andamento', color: '#f0ad4e' },
+    fechados: { text: 'Fechados', color: '#5cb85c' },
+  };
+  const currentStatus = statusConfig[activeTab as keyof typeof statusConfig];
   const filteredTickets = mockTickets.filter(ticket => {
     switch (activeTab) {
       case 'ativos': return ticket.type === 'ativo';
@@ -63,21 +106,27 @@ const currentStatus = statusConfig[activeTab as keyof typeof statusConfig];
     }
   });
 
+  // 7. <<< MUDANÇA: Função para abrir o modal >>>
+  const handleCardPress = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setModalVisible(true);
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* 1. Cabeçalho (Com logo de TEXTO) */}
+    <InsetSafeAreaView style={styles.safeArea}>
+      {/* ... (Seu Header continua igual) ... */}
       <View style={styles.header}>
         <Text style={styles.logoText}>KOZZY</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.openDrawer()}>
           <Feather name="menu" style={styles.menuIcon} />
         </TouchableOpacity>
       </View>
 
-      {/* 2. Título da Página e Tabs (Fundidos) */}
-      <View style={styles.controlsContainer}> 
+      {/* ... (Seus Controles e Tabs continuam iguais) ... */}
+      <View style={styles.controlsContainer}>
         <Text style={styles.pageTitle}>Central de Atendimento</Text>
-
         <View style={styles.segmentedControl}>
+          {/* ... (Botões de Tab) ... */}
           <TouchableOpacity
             style={[styles.segmentButton, activeTab === 'ativos' && styles.segmentButtonActive]}
             onPress={() => setActiveTab('ativos')}
@@ -105,46 +154,92 @@ const currentStatus = statusConfig[activeTab as keyof typeof statusConfig];
         </View>
       </View>
 
-      {/* <<< MUDANÇA: Status agora é dinâmico e condicional >>> */}
-      {/* 3. Status (Dinâmico) */}
-      {/* Só mostramos o status se houver tickets para exibir */}
+      {/* ... (Seu Status e Lista Vazia continuam iguais) ... */}
       {filteredTickets.length > 0 && (
         <View style={styles.activeStatus}>
-          {/* A cor da bolinha vem do 'currentStatus.color' */}
           <View style={[styles.statusDot, { backgroundColor: currentStatus.color }]} />
-          {/* O texto vem do 'currentStatus.text' */}
           <Text style={styles.statusText}>{currentStatus.text}</Text>
         </View>
       )}
-      
-      {/* 3.1. Placeholder para listas vazias */}
       {filteredTickets.length === 0 && (
          <View style={styles.emptyListContainer}>
            <Text style={styles.emptyListText}>Nenhum chamado nesta categoria.</Text>
          </View>
       )}
 
-      {/* 4. Lista de Cards */}
+      {/* 8. <<< MUDANÇA: A FlatList agora usa a nova 'onPress' >>> */}
       {filteredTickets.length > 0 && (
         <FlatList
           data={filteredTickets}
-          renderItem={SupportCard}
+          renderItem={({ item }) => (
+            <SupportCard item={item} onPress={handleCardPress} />
+          )}
           keyExtractor={item => item.id}
           style={styles.cardList}
           contentContainerStyle={{ paddingBottom: 20 }}
         />
       )}
-    </SafeAreaView>
+
+      {/* 9. <<< MUDANÇA: O MODAL DE DETALHES FOI ADICIONADO AQUI >>> */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          setModalVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Cabeçalho do Modal */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalhes do Chamado</Text>
+              <Pressable onPress={() => setModalVisible(false)}>
+                <Feather name="x" size={24} color="#ffffff" />
+              </Pressable>
+            </View>
+
+            {/* Corpo do Modal */}
+            {selectedTicket && (
+              <ScrollView style={styles.modalBody}>
+                <DetailRow label="Nº do Protocolo *" value={selectedTicket.protocol} />
+                <DetailRow label="Tipo de Cliente *" value={selectedTicket.clientType} />
+                <DetailRow label="Categoria do Assunto *" value={selectedTicket.category} />
+                <DetailRow label="Data do Atendimento *" value={selectedTicket.date} />
+                <DetailRow label="Horário *" value={selectedTicket.time} />
+                <DetailRow 
+                  label="Descrição Detalhada" 
+                  value={selectedTicket.description} 
+                  isTextArea={true} 
+                />
+              </ScrollView>
+            )}
+            
+            {/* Rodapé do Modal (apenas para fechar) */}
+            <View style={styles.modalFooter}>
+               <TouchableOpacity 
+                 style={[styles.modalButton, styles.closeButton]} 
+                 onPress={() => setModalVisible(false)}
+               >
+                 <Text style={styles.modalButtonText}>Fechar</Text>
+               </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
+    </InsetSafeAreaView>
   );
 };
 
-// --- Folha de Estilos (StyleSheet) ---
+// --- Folha de Estilos (com os novos estilos do Modal) ---
 const styles = StyleSheet.create({
+  // ... (Estilos antigos da HomeScreen continuam aqui) ...
   safeArea: {
     flex: 1,
     backgroundColor: '#f8f8f8',
   },
-  // 1. Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -165,8 +260,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#333',
   },
-  
-  // 2. Container de Controles (Título + Tabs)
   controlsContainer: {
     padding: 20,
     backgroundColor: '#ffffff',
@@ -179,8 +272,6 @@ const styles = StyleSheet.create({
     color: '#555',
     marginBottom: 15, 
   },
-
-  // 3. Controle Segmentado
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: '#ebebeb',
@@ -205,8 +296,6 @@ const styles = StyleSheet.create({
   segmentButtonTextActive: {
     color: '#ffffff',
   },
-
-  // 4. Status
   activeStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,14 +309,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginRight: 8,
-    // <<< MUDANÇA: O 'backgroundColor' estático foi removido daqui >>>
   },
   statusText: {
     fontSize: 13,
     fontWeight: '500',
     color: '#333',
   },
-  // 4.1. Lista Vazia
   emptyListContainer: {
     padding: 20,
     alignItems: 'center',
@@ -237,7 +324,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#777',
   },
-  // 5. Lista de Cards
   cardList: {
     paddingHorizontal: 20,
     backgroundColor: '#f8f8f8',
@@ -273,6 +359,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ccc',
     marginLeft: 10,
+  },
+
+  // 10. <<< MUDANÇA: NOVOS ESTILOS PARA O MODAL >>>
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Fundo escurecido
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    overflow: 'hidden', // Para forçar o borderRadius no header
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#e60023', // Vermelho do header
+    padding: 15,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  detailRowContainer: {
+    marginBottom: 15,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+  },
+  detailValueContainer: {
+    backgroundColor: '#f0f0f0', // Fundo cinza claro
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  detailValueTextArea: {
+    minHeight: 100, // Para a descrição
+  },
+  detailValue: {
+    fontSize: 15,
+    color: '#555',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  closeButton: {
+    backgroundColor: '#ccc',
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
   },
 });
 
