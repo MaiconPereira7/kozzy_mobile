@@ -7,431 +7,531 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
-  SafeAreaView,
-  Modal, // 1. <<< MUDANÇA: Importar Modal
-  Pressable, // 2. <<< MUDANÇA: Importar Pressable (para o botão 'X')
-  ScrollView, // 3. <<< MUDANÇA: Importar ScrollView (para os detalhes)
+  Modal,
+  ScrollView,
 } from 'react-native';
 
-// Ícones que vamos usar
+// Ícones
 import Feather from 'react-native-vector-icons/Feather';
-import SimpleLineIcons from 'react-native-vector-icons/SimpleLineIcons';
+import { Ionicons } from '@expo/vector-icons'; 
 
-// 4. <<< MUDANÇA >>> Importar os tipos do Drawer
+// Tipos
 import { DrawerScreenProps } from '@react-navigation/drawer';
-import { AppDrawerParamList } from '../routes/AppDrawer'; // O tipo que criamos
-import { SafeAreaView as InsetSafeAreaView } from 'react-native-safe-area-context';
+import { AppDrawerParamList } from '../routes/AppDrawer';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Define o "formato" (shape) de um ticket para o TypeScript
+// --- TIPAGEM ---
 type Ticket = {
   id: string;
-  name: string;
-  subject: string;
+  name: string; // Nome do Mercado/Cliente
+  subject: string; // Assunto Principal
   type: 'ativo' | 'andamento' | 'fechado';
-  // Adicionando campos extras para o modal (podemos usar mock data)
   protocol: string;
-  clientType: string;
-  category: string;
+  clientType: string; // Ex: Varejo, Atacado, Restaurante
+  category: string; // Ex: Logística, Financeiro
   date: string;
   time: string;
   description: string;
 };
 
-// --- Dados Mock (agora com mais detalhes) ---
+// --- DADOS MOCK (AGORA: DISTRIBUIDORA DE ALIMENTOS) ---
 const mockTickets: Ticket[] = [
   { 
-    id: '1', name: 'Dareine Roberston', subject: 'Pedido #4567 não foi entregue', type: 'ativo',
-    protocol: '10234', clientType: 'Pessoa Física', category: 'Entrega',
-    date: '15/01/2024', time: '14:30', description: 'Problema de conexão com a internet, cliente relatando lentidão. Já foi tentado reiniciar o modem.'
+    id: '1', 
+    name: 'Mercado Preço Bom', 
+    subject: 'Atraso na Entrega #4092', 
+    type: 'ativo',
+    protocol: '2025-8891', 
+    clientType: 'Varejo (Supermercado)', 
+    category: 'Logística',
+    date: '19/11/2025', 
+    time: '08:15', 
+    description: 'Cliente relatou que o caminhão não chegou no horário agendado. Precisa da mercadoria antes do meio-dia para reposição.'
   },
   { 
-    id: '2', name: 'Ronald Richards', subject: 'Pedido #4567 não foi entregue', type: 'ativo',
-    protocol: '10235', clientType: 'Pessoa Jurídica', category: 'Suporte Técnico',
-    date: '16/01/2024', time: '09:15', description: 'Cliente informa que o sistema de pedidos está offline.'
+    id: '2', 
+    name: 'Padaria Doce Sabor', 
+    subject: 'Avaria em Carga (Farinha)', 
+    type: 'ativo',
+    protocol: '2025-8895', 
+    clientType: 'Padaria/Confeitaria', 
+    category: 'Qualidade/Troca',
+    date: '19/11/2025', 
+    time: '09:30', 
+    description: '3 Sacos de farinha chegaram rasgados no lote da manhã. Motorista já registrou no canhoto, cliente pede reposição urgente.'
   },
   { 
-    id: '3', name: 'Robert Fox', subject: 'Protocolo: #2778', type: 'ativo',
-    protocol: '2778', clientType: 'Revendedor', category: 'Financeiro',
-    date: '17/01/2024', time: '11:00', description: 'Dúvida sobre a fatura de Janeiro.'
+    id: '3', 
+    name: 'Restaurante Sabor & Arte', 
+    subject: '2ª Via de Boleto', 
+    type: 'andamento',
+    protocol: '2025-8700', 
+    clientType: 'Food Service', 
+    category: 'Financeiro',
+    date: '19/11/2025', 
+    time: '10:45', 
+    description: 'Financeiro já está gerando o boleto atualizado com a nova data de vencimento.'
   },
-  // ... (outros tickets) ...
+  { 
+    id: '4', 
+    name: 'Empório Silva', 
+    subject: 'Pedido Entregue', 
+    type: 'fechado',
+    protocol: '2025-8650', 
+    clientType: 'Mercearia', 
+    category: 'Comercial',
+    date: '18/11/2025', 
+    time: '16:20', 
+    description: 'Pedido #4050 entregue e conferido. Nota fiscal assinada sem ressalvas.'
+  }
 ];
 
-// --- Componente do Card ---
-// 5. <<< MUDANÇA: Adicionamos a prop 'onPress' >>>
-const SupportCard = ({ item, onPress }: { item: Ticket, onPress: (ticket: Ticket) => void }) => (
-  <TouchableOpacity style={styles.card} onPress={() => onPress(item)}>
-    <View style={styles.cardContent}>
-      <Text style={styles.cardTitle}>{item.name}</Text>
-      <Text style={styles.cardSubtitle}>{item.subject}</Text>
+// --- CORES DA KOZZY ---
+const COLORS = {
+  primary: '#e60023', // Vermelho Kozzy
+  background: '#f8f8f8',
+  cardBg: '#ffffff',
+  textMain: '#333',
+  textLight: '#777',
+  // Cores de Status
+  statusAtivo: '#e60023',   // Vermelho (Urgente/Aberto)
+  statusAndamento: '#f0ad4e', // Laranja
+  statusFechado: '#5cb85c',   // Verde
+};
+
+// --- COMPONENTES AUXILIARES ---
+
+const StatusBadge = ({ type }: { type: string }) => {
+  let color = COLORS.textLight;
+  let text = 'Desconhecido';
+  let bg = '#EEE';
+
+  if (type === 'ativo') { 
+    color = COLORS.statusAtivo; 
+    text = 'Aberto'; 
+    bg = '#ffebee'; 
+  }
+  if (type === 'andamento') { 
+    color = COLORS.statusAndamento; 
+    text = 'Em Análise'; 
+    bg = '#fff3e0'; 
+  }
+  if (type === 'fechado') { 
+    color = COLORS.statusFechado; 
+    text = 'Concluído'; 
+    bg = '#e8f5e9'; 
+  }
+
+  return (
+    <View style={[styles.badgeContainer, { backgroundColor: bg }]}>
+      <View style={[styles.badgeDot, { backgroundColor: color }]} />
+      <Text style={[styles.badgeText, { color: color }]}>{text}</Text>
     </View>
-    <SimpleLineIcons name="arrow-right" style={styles.arrowIcon} />
+  );
+};
+
+const SupportCard = ({ item, onPress }: { item: Ticket, onPress: (ticket: Ticket) => void }) => (
+  <TouchableOpacity 
+    style={styles.card} 
+    onPress={() => onPress(item)}
+    activeOpacity={0.9}
+  >
+    <View style={styles.cardHeaderRow}>
+      <View style={styles.userInfo}>
+        <View style={styles.avatarCircle}>
+          {/* Inicial do Mercado/Empresa */}
+          <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+        </View>
+        <View>
+          <Text style={styles.cardName}>{item.name}</Text>
+          <Text style={styles.cardSubject}>{item.subject}</Text>
+        </View>
+      </View>
+      <Text style={styles.timeText}>{item.time}</Text>
+    </View>
+
+    <View style={styles.cardDivider} />
+
+    <View style={styles.cardFooterRow}>
+      <StatusBadge type={item.type} />
+      
+      <TouchableOpacity style={styles.detailsButton} onPress={() => onPress(item)}>
+        <Text style={styles.detailsButtonText}>Ver Detalhes</Text>
+        <Feather name="chevron-right" size={16} color="#999" />
+      </TouchableOpacity>
+    </View>
   </TouchableOpacity>
 );
 
-// --- Componente de Linha de Detalhe (para o Modal) ---
-const DetailRow = ({ label, value, isTextArea = false }: { label: string, value: string, isTextArea?: boolean }) => (
+const DetailRow = ({ label, value, icon, isTextArea }: any) => (
   <View style={styles.detailRowContainer}>
-    <Text style={styles.detailLabel}>{label}</Text>
-    <View style={[styles.detailValueContainer, isTextArea && styles.detailValueTextArea]}>
+    <View style={styles.labelRow}>
+      <Ionicons name={icon} size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+      <Text style={styles.detailLabel}>{label}</Text>
+    </View>
+    <View style={[styles.detailValueContainer, isTextArea && styles.textArea]}>
       <Text style={styles.detailValue}>{value}</Text>
     </View>
   </View>
 );
 
-// --- Props da Tela ---
+// --- TELA PRINCIPAL ---
 type Props = DrawerScreenProps<AppDrawerParamList, 'Home'>;
 
-// --- Componente Principal da Tela ---
 const HomeScreen = ({ navigation }: Props) => {
   const [activeTab, setActiveTab] = useState('ativos');
-  
-  // 6. <<< MUDANÇA: Estados para controlar o Modal >>>
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-  // ... (lógica de filtragem continua igual) ...
-  const statusConfig = {
-    ativos: { text: 'Ativo', color: '#e60023' }, 
-    andamento: { text: 'Andamento', color: '#f0ad4e' },
-    fechados: { text: 'Fechados', color: '#5cb85c' },
-  };
-  const currentStatus = statusConfig[activeTab as keyof typeof statusConfig];
   const filteredTickets = mockTickets.filter(ticket => {
-    switch (activeTab) {
-      case 'ativos': return ticket.type === 'ativo';
-      case 'andamento': return ticket.type === 'andamento';
-      case 'fechados': return ticket.type === 'fechado';
-      default: return false;
-    }
+    if (activeTab === 'ativos') return ticket.type === 'ativo';
+    if (activeTab === 'andamento') return ticket.type === 'andamento';
+    if (activeTab === 'fechados') return ticket.type === 'fechado';
+    return false;
   });
 
-  // 7. <<< MUDANÇA: Função para abrir o modal >>>
   const handleCardPress = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     setModalVisible(true);
   };
 
   return (
-    <InsetSafeAreaView style={styles.safeArea}>
-      {/* ... (Seu Header continua igual) ... */}
-      <View style={styles.header}>
-        <Text style={styles.logoText}>KOZZY</Text>
-        <TouchableOpacity onPress={() => navigation.openDrawer()}>
-          <Feather name="menu" style={styles.menuIcon} />
+    <SafeAreaView style={styles.container}>
+      
+      <View style={styles.headerContainer}>
+        <View>
+          <Text style={styles.logoText}>KOZZY</Text>
+          <Text style={styles.subLogoText}>Distribuição & Logística</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.menuButton} 
+          onPress={() => navigation.openDrawer()}
+        >
+          <Feather name="menu" size={24} color="#333" />
         </TouchableOpacity>
       </View>
 
-      {/* ... (Seus Controles e Tabs continuam iguais) ... */}
-      <View style={styles.controlsContainer}>
-        <Text style={styles.pageTitle}>Central de Atendimento</Text>
-        <View style={styles.segmentedControl}>
-          {/* ... (Botões de Tab) ... */}
+      <View style={styles.tabsContainer}>
+        {['ativos', 'andamento', 'fechados'].map((tab) => (
           <TouchableOpacity
-            style={[styles.segmentButton, activeTab === 'ativos' && styles.segmentButtonActive]}
-            onPress={() => setActiveTab('ativos')}
+            key={tab}
+            style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
+            onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.segmentButtonText, activeTab === 'ativos' && styles.segmentButtonTextActive]}>
-              Ativos
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab === 'ativos' ? 'Abertos' : tab === 'andamento' ? 'Análise' : 'Concluídos'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentButton, activeTab === 'andamento' && styles.segmentButtonActive]}
-            onPress={() => setActiveTab('andamento')}
-          >
-            <Text style={[styles.segmentButtonText, activeTab === 'andamento' && styles.segmentButtonTextActive]}>
-              Andamento
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentButton, activeTab === 'fechados' && styles.segmentButtonActive]}
-            onPress={() => setActiveTab('fechados')}
-          >
-            <Text style={[styles.segmentButtonText, activeTab === 'fechados' && styles.segmentButtonTextActive]}>
-              Fechados
-            </Text>
-          </TouchableOpacity>
-        </View>
+        ))}
       </View>
 
-      {/* ... (Seu Status e Lista Vazia continuam iguais) ... */}
-      {filteredTickets.length > 0 && (
-        <View style={styles.activeStatus}>
-          <View style={[styles.statusDot, { backgroundColor: currentStatus.color }]} />
-          <Text style={styles.statusText}>{currentStatus.text}</Text>
-        </View>
-      )}
-      {filteredTickets.length === 0 && (
-         <View style={styles.emptyListContainer}>
-           <Text style={styles.emptyListText}>Nenhum chamado nesta categoria.</Text>
-         </View>
-      )}
+      <FlatList
+        data={filteredTickets}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => <SupportCard item={item} onPress={handleCardPress} />}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cube-outline" size={60} color="#CCC" />
+            <Text style={styles.emptyText}>Nenhum chamado nesta lista.</Text>
+          </View>
+        }
+      />
 
-      {/* 8. <<< MUDANÇA: A FlatList agora usa a nova 'onPress' >>> */}
-      {filteredTickets.length > 0 && (
-        <FlatList
-          data={filteredTickets}
-          renderItem={({ item }) => (
-            <SupportCard item={item} onPress={handleCardPress} />
-          )}
-          keyExtractor={item => item.id}
-          style={styles.cardList}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
-      )}
-
-      {/* 9. <<< MUDANÇA: O MODAL DE DETALHES FOI ADICIONADO AQUI >>> */}
+      {/* Modal */}
       <Modal
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => {
-          setModalVisible(false);
-        }}
+        onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            {/* Cabeçalho do Modal */}
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalhes do Chamado</Text>
-              <Pressable onPress={() => setModalVisible(false)}>
-                <Feather name="x" size={24} color="#ffffff" />
-              </Pressable>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeIcon}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
             </View>
 
-            {/* Corpo do Modal */}
             {selectedTicket && (
-              <ScrollView style={styles.modalBody}>
-                <DetailRow label="Nº do Protocolo *" value={selectedTicket.protocol} />
-                <DetailRow label="Tipo de Cliente *" value={selectedTicket.clientType} />
-                <DetailRow label="Categoria do Assunto *" value={selectedTicket.category} />
-                <DetailRow label="Data do Atendimento *" value={selectedTicket.date} />
-                <DetailRow label="Horário *" value={selectedTicket.time} />
-                <DetailRow 
-                  label="Descrição Detalhada" 
-                  value={selectedTicket.description} 
-                  isTextArea={true} 
-                />
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHighlight}>
+                   <Text style={styles.highlightName}>{selectedTicket.name}</Text>
+                   <Text style={styles.highlightProtocol}>Protocolo: #{selectedTicket.protocol}</Text>
+                </View>
+
+                <DetailRow icon="calendar-outline" label="Data de Abertura" value={`${selectedTicket.date} às ${selectedTicket.time}`} />
+                <DetailRow icon="business-outline" label="Segmento" value={selectedTicket.clientType} />
+                <DetailRow icon="pricetag-outline" label="Departamento" value={selectedTicket.category} />
+                <DetailRow icon="clipboard-outline" label="Descrição da Ocorrência" value={selectedTicket.description} isTextArea />
+
+                <TouchableOpacity 
+                  style={styles.actionButton} 
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.actionButtonText}>Fechar</Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
-            
-            {/* Rodapé do Modal (apenas para fechar) */}
-            <View style={styles.modalFooter}>
-               <TouchableOpacity 
-                 style={[styles.modalButton, styles.closeButton]} 
-                 onPress={() => setModalVisible(false)}
-               >
-                 <Text style={styles.modalButtonText}>Fechar</Text>
-               </TouchableOpacity>
-            </View>
-
           </View>
         </View>
       </Modal>
 
-    </InsetSafeAreaView>
+    </SafeAreaView>
   );
 };
 
-// --- Folha de Estilos (com os novos estilos do Modal) ---
 const styles = StyleSheet.create({
-  // ... (Estilos antigos da HomeScreen continuam aqui) ...
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: COLORS.background,
   },
-  header: {
+  // Header
+  headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
+    paddingVertical: 15,
+    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#EEE',
   },
-  logoText: { 
+  logoText: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#e60023', 
+    fontWeight: '800',
+    color: COLORS.primary, 
     letterSpacing: -0.5,
   },
-  menuIcon: {
-    fontSize: 24,
-    color: '#333',
-  },
-  controlsContainer: {
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  pageTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#555',
-    marginBottom: 15, 
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: '#ebebeb',
-    borderRadius: 10,
-    padding: 4,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-  },
-  segmentButtonActive: {
-    backgroundColor: '#e60023',
-  },
-  segmentButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
+  subLogoText: {
+    fontSize: 12,
     color: '#777',
-    textAlign: 'center',
-  },
-  segmentButtonTextActive: {
-    color: '#ffffff',
-  },
-  activeStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 5,
-    backgroundColor: '#f8f8f8',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 13,
     fontWeight: '500',
-    color: '#333',
   },
-  emptyListContainer: {
-    padding: 20,
-    alignItems: 'center',
+  menuButton: {
+    padding: 8,
+  },
+  // Tabs
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
     marginTop: 20,
+    marginBottom: 10,
   },
-  emptyListText: {
-    fontSize: 14,
-    color: '#777',
-  },
-  cardList: {
-    paddingHorizontal: 20,
-    backgroundColor: '#f8f8f8',
-  },
-  card: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#e0e0e0',
+    marginRight: 8,
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+  },
+  tabButtonActive: {
+    backgroundColor: COLORS.primary, 
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
+  },
+  tabTextActive: {
+    color: '#FFF',
+  },
+  // Lista
+  listContent: {
     padding: 20,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  emptyText: {
+    marginTop: 10,
+    color: '#999',
+    fontSize: 16,
+  },
+  // CARD
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  cardContent: {
-    flex: 1,
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  cardTitle: {
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#ffebee', 
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.primary, 
+  },
+  cardName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 4,
+    width: 180, // Limita largura para não quebrar layout
   },
-  cardSubtitle: {
+  cardSubject: {
     fontSize: 13,
     color: '#777',
   },
-  arrowIcon: {
-    fontSize: 16,
-    color: '#ccc',
-    marginLeft: 10,
+  timeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
   },
-
-  // 10. <<< MUDANÇA: NOVOS ESTILOS PARA O MODAL >>>
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Fundo escurecido
-    justifyContent: 'center',
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginVertical: 12,
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  modalContainer: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    overflow: 'hidden', // Para forçar o borderRadius no header
+  // Badge
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailsButtonText: {
+    fontSize: 13,
+    color: '#777',
+    marginRight: 2,
+  },
+  // MODAL
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    height: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#DDD',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#e60023', // Vermelho do header
-    padding: 15,
+    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#333',
   },
-  modalBody: {
-    padding: 20,
+  closeIcon: {
+    padding: 5,
+  },
+  modalHighlight: {
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  highlightName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#333',
+  },
+  highlightProtocol: {
+    fontSize: 14,
+    color: COLORS.primary, 
+    marginTop: 2,
+    fontWeight: '600',
   },
   detailRowContainer: {
     marginBottom: 15,
   },
-  detailLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 5,
   },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
   detailValueContainer: {
-    backgroundColor: '#f0f0f0', // Fundo cinza claro
+    backgroundColor: '#f9f9f9',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#eee',
   },
-  detailValueTextArea: {
-    minHeight: 100, // Para a descrição
+  textArea: {
+    minHeight: 80,
   },
   detailValue: {
-    fontSize: 15,
-    color: '#555',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  closeButton: {
-    backgroundColor: '#ccc',
-  },
-  modalButtonText: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontSize: 14,
     color: '#333',
+    lineHeight: 20,
+  },
+  actionButton: {
+    backgroundColor: COLORS.primary, 
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  actionButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

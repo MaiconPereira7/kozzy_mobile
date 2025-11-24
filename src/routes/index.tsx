@@ -1,46 +1,41 @@
-// src/routes/index.tsx
-
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// 1. Importa as telas
 import LoginScreen from '../screens/LoginScreen';
 import RegistrationScreen from '../screens/RegistrationScreen'; 
 import AppDrawer from './AppDrawer';
-// <<< MUDANÇA >>> Importar a nova tela
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'; 
+import ProfileScreen from '../screens/ProfileScreen';
+// 1. IMPORTAR A NOVA TELA
+import NotificacoesScreen from '../screens/NotificacoesScreen';
 
-// 2. <<< MUDANÇA >>> Atualiza o "mapa" de rotas
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  App: undefined; 
-  ForgotPassword: undefined; // <-- ADICIONA A NOVA ROTA
+  ForgotPassword: undefined;
+  App: undefined;
+  Profile: undefined;
+  Notifications: undefined; // 2. ADICIONAR NA TIPAGEM
 };
 
-// 3. Cria o controlador da pilha
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// 4. Componente do mapa
 const AppRoutes = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName="Login"
-        screenOptions={{
-          headerShown: false,
-        }}
+        screenOptions={{ headerShown: false }}
       >
-        {/* 5. Telas de Autenticação */}
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegistrationScreen} />
-        
-        {/* <<< MUDANÇA >>> Adiciona a nova tela ao Stack */}
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-        
-        {/* 6. Tela do App (que contém o Drawer) */}
         <Stack.Screen name="App" component={AppDrawer} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        
+        {/* 3. REGISTRAR A ROTA AQUI */}
+        <Stack.Screen name="Notifications" component={NotificacoesScreen} />
       
       </Stack.Navigator>
     </NavigationContainer>
