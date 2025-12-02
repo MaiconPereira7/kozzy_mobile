@@ -17,7 +17,6 @@ import Checkbox from 'expo-checkbox';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../routes'; 
 import { UserContext } from '../contexts/UserContext';
-import { api } from '../services/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -35,25 +34,22 @@ const LoginScreen = ({ navigation }: Props) => {
       return;
     }
 
-    try {
-      setLoading(true);
-      // Chama a API para logar
-      const response = await api('/login', 'POST', { email, password: senha });
-      
-      // Salva dados reais no app
+    setLoading(true);
+
+    // --- LOGIN MOCK (SIMULADO) ---
+    // Simula um delay de 1.5 segundos para parecer real
+    setTimeout(() => {
+      // Salva dados fictícios no contexto global
       updateUser({
-        name: response.user.name,
-        email: response.user.email,
-        avatar: response.user.avatar || null
+        name: "Usuário Teste",
+        email: email, // Usa o email que a pessoa digitou
+        avatar: null
       });
 
+      setLoading(false);
       // Vai para a Home
       navigation.replace('App'); 
-    } catch (error: any) {
-      Alert.alert("Erro", error.message || "Falha no login");
-    } finally {
-      setLoading(false);
-    }
+    }, 1500);
   };
 
   return (
@@ -114,7 +110,6 @@ const LoginScreen = ({ navigation }: Props) => {
             </LinearGradient>
           </TouchableOpacity>
           
-          {/* SEM LINK DE CADASTRO */}
         </View>
       </KeyboardAvoidingView>
     </LinearGradient>

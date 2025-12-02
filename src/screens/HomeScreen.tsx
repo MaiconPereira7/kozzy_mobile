@@ -16,11 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { DrawerScreenProps } from '@react-navigation/drawer';
 import { AppDrawerParamList } from '../routes/AppDrawer';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { api } from '../services/api';
 
+// --- TIPO DE DADOS ---
 type Ticket = {
   id: string;
-  _id?: string; // MongoDB usa _id
   name: string;
   subject: string;
   type: 'ativo' | 'andamento' | 'fechado';
@@ -31,6 +30,130 @@ type Ticket = {
   time: string;
   description: string;
 };
+
+// --- DADOS FICTÍCIOS (MOCK) ---
+const DUMMY_TICKETS: Ticket[] = [
+  {
+    id: '1',
+    name: 'Padaria do João',
+    subject: 'Atraso na entrega de farinha',
+    type: 'ativo',
+    protocol: 'KZ-2024001',
+    clientType: 'Varejo',
+    category: 'Logística',
+    date: '25/10/2023',
+    time: '14:30',
+    description: 'O cliente relata que o pedido #12345 deveria ter chegado pela manhã e ainda não foi entregue. Caminhão está parado no centro.'
+  },
+  {
+    id: '2',
+    name: 'Mercado Silva',
+    subject: 'Produto veio danificado',
+    type: 'andamento',
+    protocol: 'KZ-2024002',
+    clientType: 'Atacado',
+    category: 'Qualidade',
+    date: '24/10/2023',
+    time: '09:15',
+    description: 'Caixas de leite chegaram amassadas. Solicitam troca imediata ou crédito na próxima compra.'
+  },
+  {
+    id: '3',
+    name: 'Restaurante Sabor',
+    subject: 'Dúvida sobre boleto',
+    type: 'fechado',
+    protocol: 'KZ-2024003',
+    clientType: 'Food Service',
+    category: 'Financeiro',
+    date: '20/10/2023',
+    time: '16:45',
+    description: 'Cliente não recebeu o boleto por e-mail. Segunda via enviada e confirmada pelo cliente.'
+  },
+  {
+    id: '4',
+    name: 'Empório Gourmet',
+    subject: 'Novo pedido urgente',
+    type: 'ativo',
+    protocol: 'KZ-2024004',
+    clientType: 'Varejo',
+    category: 'Vendas',
+    date: '26/10/2023',
+    time: '08:00',
+    description: 'Precisa de reposição de azeites importados para evento no fim de semana. Cliente VIP.'
+  },
+  {
+    id: '5',
+    name: 'Hotel Central',
+    subject: 'Pedido Incompleto',
+    type: 'andamento',
+    protocol: 'KZ-2024005',
+    clientType: 'Hotelaria',
+    category: 'Logística',
+    date: '23/10/2023',
+    time: '11:20',
+    description: 'Faltaram 5 caixas de suco de laranja no pedido entregue hoje. Motorista confirmou a falta no canhoto.'
+  },
+  {
+    id: '6',
+    name: 'Lanchonete da Esquina',
+    subject: 'Troca de produto',
+    type: 'ativo',
+    protocol: 'KZ-2024006',
+    clientType: 'Food Service',
+    category: 'Vendas',
+    date: '26/10/2023',
+    time: '10:10',
+    description: 'Pediu maionese sachê mas recebeu pote de 3kg. Quer realizar a troca antes do almoço.'
+  },
+  {
+    id: '7',
+    name: 'Supermercado Preço Baixo',
+    subject: 'Alteração de endereço',
+    type: 'fechado',
+    protocol: 'KZ-2024007',
+    clientType: 'Atacado',
+    category: 'Cadastro',
+    date: '19/10/2023',
+    time: '15:00',
+    description: 'Solicitação de mudança de endereço de entrega para a nova filial. Atualizado no sistema.'
+  },
+  {
+    id: '8',
+    name: 'Escola Municipal',
+    subject: 'Agendamento de entrega',
+    type: 'ativo',
+    protocol: 'KZ-2024008',
+    clientType: 'Institucional',
+    category: 'Logística',
+    date: '27/10/2023',
+    time: '07:30',
+    description: 'Solicitam que a entrega da merenda seja feita estritamente entre 08:00 e 10:00 devido ao horário do recreio.'
+  },
+  {
+    id: '9',
+    name: 'Buffet Festas & Cia',
+    subject: 'Nota Fiscal com erro',
+    type: 'andamento',
+    protocol: 'KZ-2024009',
+    clientType: 'Eventos',
+    category: 'Financeiro',
+    date: '24/10/2023',
+    time: '13:45',
+    description: 'CNPJ na nota fiscal saiu incorreto. O financeiro já está emitindo a carta de correção.'
+  },
+  {
+    id: '10',
+    name: 'Quiosque da Praia',
+    subject: 'Cancelamento de pedido',
+    type: 'fechado',
+    protocol: 'KZ-2024010',
+    clientType: 'Varejo',
+    category: 'Vendas',
+    date: '18/10/2023',
+    time: '09:00',
+    description: 'Cliente cancelou o pedido de sorvetes devido à previsão de chuva forte no fim de semana.'
+  }
+];
 
 const COLORS = {
   primary: '#e60023', 
@@ -106,30 +229,24 @@ const HomeScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchTickets = async () => {
-    try {
-      const data = await api('/tickets');
-      // Normaliza o ID vindo do Mongo
-      const formattedData = data.map((t: any) => ({
-        ...t,
-        id: t._id || t.id, 
-      }));
-      setTickets(formattedData);
-    } catch (error) {
-      console.log("Erro ao carregar chamados");
-    } finally {
+  // --- CARREGAMENTO SIMULADO ---
+  const loadDummyData = () => {
+    setLoading(true);
+    // Simula um delay de rede de 1 segundo para dar uma sensação realista
+    setTimeout(() => {
+      setTickets(DUMMY_TICKETS);
       setLoading(false);
       setRefreshing(false);
-    }
+    }, 1000);
   };
 
   useEffect(() => {
-    fetchTickets();
+    loadDummyData();
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchTickets();
+    loadDummyData();
   };
 
   const filteredTickets = tickets.filter(ticket => {
