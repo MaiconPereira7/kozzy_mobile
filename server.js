@@ -8,12 +8,15 @@ app.use(express.json());
 app.use(cors());
 
 // --- CONEXÃO COM O BANCO ---
-// ⚠️ IMPORTANTE: Substitua pela sua URL de conexão real do MongoDB Atlas
-const MONGO_URI = "mongodb+srv://eduardobarrosreis03:LZcOYBpywEeW2boO@app-kozzy.z8ovmnp.mongodb.net/?appName=App-Kozzys";
+// Adicionei "/kozzy_db" na URL para garantir que salva no banco certo
+const MONGO_URI = "mongodb+srv://eduardobarrosreis03:LZcOYBpywEeW2boO@app-kozzy.z8ovmnp.mongodb.net/kozzy_db?appName=App-Kozzys";
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log('🔥 Conectado ao MongoDB!'))
-  .catch(err => console.log('❌ Erro na conexão:', err));
+  .catch(err => {
+    console.log('❌ Erro na conexão com o Banco:', err);
+    // Se der erro de ENOTFOUND, é bloqueio de rede. Tente usar DNS do Google (8.8.8.8) ou rotear do celular.
+  });
 
 // --- MODELOS ---
 const UserSchema = new mongoose.Schema({
@@ -39,7 +42,6 @@ const Ticket = mongoose.model('Ticket', TicketSchema);
 
 // --- ROTAS ---
 
-// Login (Usado pelo App)
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -58,7 +60,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Criar Usuário (Use o Postman para criar usuários, pois removemos a tela do app)
 app.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -70,7 +71,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Buscar Tickets (Usado pela Home)
 app.get('/tickets', async (req, res) => {
   try {
     const tickets = await Ticket.find();
@@ -80,7 +80,6 @@ app.get('/tickets', async (req, res) => {
   }
 });
 
-// Criar Ticket (Para popular o banco via Postman)
 app.post('/tickets', async (req, res) => {
   try {
     const newTicket = new Ticket(req.body);

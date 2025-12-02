@@ -1,14 +1,9 @@
 // src/services/api.ts
-
-// ⚠️ Use o IP que aparece no QR Code do seu Expo (ex: 192.168.15.4)
-const BASE_URL = 'http://192.168.15.4:3000'; 
+const BASE_URL = 'http://192.168.15.4:3000'; // <--- CONFIRMA SE O IP CONTINUA ESSE
 
 export const api = async (endpoint: string, method: string = 'GET', body?: any) => {
-  try { // <--- A LINHA QUE FALTOU NO SEU CÓDIGO
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
+  try {
+    const headers = { 'Content-Type': 'application/json' };
     const config: RequestInit = {
       method,
       headers,
@@ -23,7 +18,7 @@ export const api = async (endpoint: string, method: string = 'GET', body?: any) 
     }
 
     return data;
-  } catch (error: any) { // Agora este catch vai funcionar
+  } catch (error: any) {
     console.error(`Erro API [${endpoint}]:`, error);
     throw error;
   }
