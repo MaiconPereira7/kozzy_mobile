@@ -1,3 +1,4 @@
+// src/contexts/UserContext.tsx
 import React, { createContext, useState, ReactNode } from 'react';
 
 interface UserData {
@@ -15,8 +16,8 @@ export const UserContext = createContext<UserContextType>({} as UserContextType)
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserData>({
-    name: 'Kozzy Admin',
-    email: 'admin@kozzy.com.br',
+    name: '',
+    email: '',
     avatar: null,
   });
 

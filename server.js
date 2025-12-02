@@ -1,4 +1,4 @@
-// api-kozzy/server.js
+// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7,19 +7,23 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// --- CONFIGURAÇÃO DO BANCO ---
-// COLOQUE AQUI A URL DO SEU BANCO DE DADOS DO SITE (MongoDB Atlas ou VPS)
-// Exemplo: "mongodb+srv://admin:senha123@cluster0.mongodb.net/kozzy_db"
-const MONGO_URI = "mongodb+srv://SEU_USUARIO:SUA_SENHA@SEU_CLUSTER.mongodb.net/NOME_DO_BANCO";
+// --- CONEXÃO COM O BANCO ---
+// ⚠️ IMPORTANTE: Substitua pela sua URL de conexão real do MongoDB Atlas
+const MONGO_URI = "mongodb+srv://eduardobarrosreis03:LZcOYBpywEeW2boO@app-kozzy.z8ovmnp.mongodb.net/?appName=App-Kozzys";
 
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('🔥 Conectado ao Banco do Site!'))
+  .then(() => console.log('🔥 Conectado ao MongoDB!'))
   .catch(err => console.log('❌ Erro na conexão:', err));
 
-// --- MODELO (Schema) ---
-// Importante: Os nomes aqui devem ser iguais aos que você salvou no site.
-// Se no site você salvou como "cliente_nome", aqui tem que ser "cliente_nome".
-// Vou usar os nomes que definimos no App, ajuste conforme seu banco real.
+// --- MODELOS ---
+const UserSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  avatar: String
+});
+const User = mongoose.model('User', UserSchema);
+
 const TicketSchema = new mongoose.Schema({
   name: String,        
   subject: String,     
@@ -31,30 +35,60 @@ const TicketSchema = new mongoose.Schema({
   date: String,
   time: String,
 });
-
-// "Ticket" é o nome da coleção. Se no banco estiver "chamados", mude para mongoose.model('chamados', TicketSchema)
 const Ticket = mongoose.model('Ticket', TicketSchema);
 
 // --- ROTAS ---
-app.get('/tickets', async (req, res) => {
+
+// Login (Usado pelo App)
+app.post('/login', async (req, res) => {
   try {
-    const tickets = await Ticket.find(); // Pega tudo do banco
-    res.json(tickets);
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    
+    if (!user || user.password !== password) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    res.json({ 
+      message: 'Login OK', 
+      user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar }
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar' });
+    res.status(500).json({ error: 'Erro no login' });
   }
 });
 
-// Rota para criar um teste (caso precise popular o banco)
+// Criar Usuário (Use o Postman para criar usuários, pois removemos a tela do app)
+app.post('/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const newUser = new User({ name, email, password, avatar: null });
+    await newUser.save();
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao registrar' });
+  }
+});
+
+// Buscar Tickets (Usado pela Home)
+app.get('/tickets', async (req, res) => {
+  try {
+    const tickets = await Ticket.find();
+    res.json(tickets);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar tickets' });
+  }
+});
+
+// Criar Ticket (Para popular o banco via Postman)
 app.post('/tickets', async (req, res) => {
   try {
     const newTicket = new Ticket(req.body);
     await newTicket.save();
     res.json(newTicket);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar' });
+    res.status(500).json({ error: 'Erro ao salvar ticket' });
   }
 });
 
-// Rodar na porta 3000
-app.listen(3000, () => console.log('🚀 API rodando na porta 3000'));
+app.listen(3000, () => console.log('🚀 Servidor rodando na porta 3000'));

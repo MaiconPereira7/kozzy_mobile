@@ -25,7 +25,7 @@
     "expo-notifications": "~0.32.13",
     "expo-status-bar": "~3.0.8",
     "express": "^5.1.0",
-    "mongoose": "^8.20.0",
+    "mongoose": "^8.20.1",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",

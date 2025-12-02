@@ -1,22 +1,22 @@
+// src/routes/index.tsx
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import LoginScreen from '../screens/LoginScreen';
-import RegistrationScreen from '../screens/RegistrationScreen'; 
+// import RegistrationScreen from '../screens/RegistrationScreen'; // <--- REMOVIDO
 import AppDrawer from './AppDrawer';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'; 
 import ProfileScreen from '../screens/ProfileScreen';
-// 1. IMPORTAR A NOVA TELA
 import NotificacoesScreen from '../screens/NotificacoesScreen';
 
 export type RootStackParamList = {
   Login: undefined;
-  Register: undefined;
+  // Register: undefined; // <--- REMOVIDO
   ForgotPassword: undefined;
   App: undefined;
   Profile: undefined;
-  Notifications: undefined; // 2. ADICIONAR NA TIPAGEM
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -29,14 +29,11 @@ const AppRoutes = () => {
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegistrationScreen} />
+        {/* <Stack.Screen name="Register" component={RegistrationScreen} /> */}
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="App" component={AppDrawer} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
-        
-        {/* 3. REGISTRAR A ROTA AQUI */}
         <Stack.Screen name="Notifications" component={NotificacoesScreen} />
-      
       </Stack.Navigator>
     </NavigationContainer>
   );
