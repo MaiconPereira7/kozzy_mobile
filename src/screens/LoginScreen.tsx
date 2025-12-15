@@ -1,4 +1,3 @@
-// src/screens/LoginScreen.tsx
 import React, { useState, useContext } from 'react';
 import {
   View,
@@ -17,6 +16,7 @@ import Checkbox from 'expo-checkbox';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../routes'; 
 import { UserContext } from '../contexts/UserContext';
+import { api } from '../services/api'; // <--- Importando a conexão real
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -36,26 +36,34 @@ const LoginScreen = ({ navigation }: Props) => {
 
     setLoading(true);
 
-    // --- LÓGICA DE LOGIN COM SUPERVISOR ---
-    setTimeout(() => {
-      // Verifica se é supervisor (regra simples: se tiver 'admin' no email)
+    try {
+      // --- LÓGICA DE LOGIN REAL (Conectado ao Banco) ---
+      const response = await api('/login', 'POST', { 
+        email: email.trim(), 
+        password: senha.trim() 
+      });
+
+      const userData = response.user;
+
+      // Verifica se é supervisor (lógica simples baseada no email)
       const isSupervisor = email.toLowerCase().includes('admin');
 
       updateUser({
-        name: isSupervisor ? "Supervisor" : "Usuário Teste",
-        email: email,
-        avatar: null,
-        role: isSupervisor ? 'supervisor' : 'user' // <--- DEFINE O PAPEL AQUI
+        name: userData.name || "Usuário",
+        email: userData.email,
+        avatar: userData.avatar,
+        role: isSupervisor ? 'supervisor' : 'user'
       });
 
-      setLoading(false);
-
-      if (isSupervisor) {
-        Alert.alert("Acesso Administrativo", "Você entrou no modo Supervisor.");
-      }
-
+      // Sucesso!
       navigation.replace('App'); 
-    }, 1500);
+
+    } catch (error: any) {
+      console.error("Erro Login:", error);
+      Alert.alert("Erro de Acesso", "Não foi possível conectar. Verifique se o servidor está rodando no PC.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -116,9 +124,11 @@ const LoginScreen = ({ navigation }: Props) => {
             </LinearGradient>
           </TouchableOpacity>
           
-          <Text style={{textAlign:'center', marginTop: 20, color: '#999', fontSize: 12}}>
-            Dica: Use "admin@kozzy.com" para testar o Supervisor
-          </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Register' as any)} style={{marginTop: 20}}>
+            <Text style={{textAlign:'center', color: '#999', fontSize: 12}}>
+              Criar conta nova
+            </Text>
+          </TouchableOpacity>
 
         </View>
       </KeyboardAvoidingView>

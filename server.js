@@ -1,4 +1,4 @@
-// server.js
+// server.js - VERSÃO COM AUTO-CRIAÇÃO DE USUÁRIO
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7,87 +7,88 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// --- CONEXÃO COM O BANCO ---
-// Adicionei "/kozzy_db" na URL para garantir que salva no banco certo
-const MONGO_URI = "mongodb+srv://eduardobarrosreis03:LZcOYBpywEeW2boO@app-kozzy.z8ovmnp.mongodb.net/kozzy_db?appName=App-Kozzys";
+// SUA CONEXÃO
+const MONGO_URI = "mongodb+srv://eduardobarrosreis03:LZcOYBpywEeW2boO@app-kozzy.z8ovmnp.mongodb.net/?appName=App-Kozzys";
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('🔥 Conectado ao MongoDB!'))
-  .catch(err => {
-    console.log('❌ Erro na conexão com o Banco:', err);
-    // Se der erro de ENOTFOUND, é bloqueio de rede. Tente usar DNS do Google (8.8.8.8) ou rotear do celular.
-  });
-
-// --- MODELOS ---
+// --- MODELO ---
 const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  name: { type: String },
+  email: { type: String, required: true },
   password: { type: String, required: true },
   avatar: String
 });
-const User = mongoose.model('User', UserSchema);
+// Forçando o nome da coleção para 'users' para evitar confusão
+const User = mongoose.model('User', UserSchema, 'users');
 
-const TicketSchema = new mongoose.Schema({
-  name: String,        
-  subject: String,     
-  type: String,        // ativo, andamento, fechado
-  protocol: String,
-  clientType: String,
-  category: String,
-  description: String,
-  date: String,
-  time: String,
-});
-const Ticket = mongoose.model('Ticket', TicketSchema);
+// --- CONEXÃO E AUTO-SETUP ---
+mongoose.connect(MONGO_URI)
+  .then(async () => {
+    console.log('🔥 CONECTADO AO MONGODB!');
 
-// --- ROTAS ---
+    try {
+      // Verifica se existe algum usuário
+      const count = await User.countDocuments();
+      if (count === 0) {
+        console.log("\n⚠️ BANCO VAZIO DETECTADO!");
+        console.log("⚙️ Criando usuário ADMIN automático...");
+        
+        await User.create({
+          name: "Admin Kozzy",
+          email: "admin@kozzy.com",
+          password: "123",
+          avatar: null
+        });
+        
+        console.log("✅ USUÁRIO CRIADO COM SUCESSO:");
+        console.log("   📧 Email: admin@kozzy.com");
+        console.log("   🔑 Senha: 123");
+        console.log("👉 TENTE LOGAR COM ESSES DADOS AGORA!\n");
+      } else {
+        console.log(`✅ O banco já tem ${count} usuário(s) cadastrado(s).`);
+      }
+    } catch (err) {
+      console.log("Erro ao verificar usuários:", err);
+    }
+  })
+  .catch(err => console.log('❌ ERRO NA CONEXÃO COM O BANCO:', err));
 
+// --- ROTA DE LOGIN DIAGNÓSTICA ---
 app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  console.log(`\n📨 RECEBI PEDIDO DE LOGIN:`);
+  console.log(`   Email: [${email}]`);
+  console.log(`   Senha: [${password}]`);
+
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    
-    if (!user || user.password !== password) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!email || !password) {
+        console.log("❌ Falha: Email ou senha vazios.");
+        return res.status(400).json({ error: 'Preencha email e senha' });
     }
 
+    // Busca exata
+    const user = await User.findOne({ email: email.trim() });
+
+    if (!user) {
+      console.log("❌ Falha: Usuário NÃO existe no banco.");
+      return res.status(401).json({ error: 'Usuário não encontrado. Use admin@kozzy.com' });
+    }
+
+    if (user.password !== password.trim()) {
+      console.log(`❌ Falha: Senha errada para ${email}.`);
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+
+    console.log("✅ SUCESSO: Login autorizado! Enviando resposta...");
     res.json({ 
       message: 'Login OK', 
-      user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar }
+      user: { id: user._id, name: user.name, email: user.email, role: 'supervisor' }
     });
+
   } catch (error) {
-    res.status(500).json({ error: 'Erro no login' });
+    console.error("❌ ERRO INTERNO DO SERVIDOR:", error);
+    res.status(500).json({ error: 'Erro no Servidor (Veja o terminal do PC)' });
   }
 });
 
-app.post('/register', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    const newUser = new User({ name, email, password, avatar: null });
-    await newUser.save();
-    res.status(201).json(newUser);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar' });
-  }
-});
-
-app.get('/tickets', async (req, res) => {
-  try {
-    const tickets = await Ticket.find();
-    res.json(tickets);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar tickets' });
-  }
-});
-
-app.post('/tickets', async (req, res) => {
-  try {
-    const newTicket = new Ticket(req.body);
-    await newTicket.save();
-    res.json(newTicket);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar ticket' });
-  }
-});
-
-app.listen(3000, () => console.log('🚀 Servidor rodando na porta 3000'));
+// Acesso liberado para a rede
+app.listen(3000, '0.0.0.0', () => console.log('🚀 SERVIDOR RODANDO!'));
