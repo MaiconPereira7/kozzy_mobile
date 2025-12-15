@@ -36,18 +36,24 @@ const LoginScreen = ({ navigation }: Props) => {
 
     setLoading(true);
 
-    // --- LOGIN MOCK (SIMULADO) ---
-    // Simula um delay de 1.5 segundos para parecer real
+    // --- LÓGICA DE LOGIN COM SUPERVISOR ---
     setTimeout(() => {
-      // Salva dados fictícios no contexto global
+      // Verifica se é supervisor (regra simples: se tiver 'admin' no email)
+      const isSupervisor = email.toLowerCase().includes('admin');
+
       updateUser({
-        name: "Usuário Teste",
-        email: email, // Usa o email que a pessoa digitou
-        avatar: null
+        name: isSupervisor ? "Supervisor" : "Usuário Teste",
+        email: email,
+        avatar: null,
+        role: isSupervisor ? 'supervisor' : 'user' // <--- DEFINE O PAPEL AQUI
       });
 
       setLoading(false);
-      // Vai para a Home
+
+      if (isSupervisor) {
+        Alert.alert("Acesso Administrativo", "Você entrou no modo Supervisor.");
+      }
+
       navigation.replace('App'); 
     }, 1500);
   };
@@ -64,7 +70,7 @@ const LoginScreen = ({ navigation }: Props) => {
             <MaterialCommunityIcons name="account-outline" size={20} color="#666" style={styles.icon} />
             <TextInput
               style={styles.input}
-              placeholder="Digite seu e-mail"
+              placeholder="Ex: admin@kozzy.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -110,6 +116,10 @@ const LoginScreen = ({ navigation }: Props) => {
             </LinearGradient>
           </TouchableOpacity>
           
+          <Text style={{textAlign:'center', marginTop: 20, color: '#999', fontSize: 12}}>
+            Dica: Use "admin@kozzy.com" para testar o Supervisor
+          </Text>
+
         </View>
       </KeyboardAvoidingView>
     </LinearGradient>

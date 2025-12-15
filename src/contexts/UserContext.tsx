@@ -5,6 +5,7 @@ interface UserData {
   name: string;
   email: string;
   avatar: string | null;
+  role: 'user' | 'supervisor'; // <--- ADICIONADO: Nível de acesso
 }
 
 interface UserContextType {
@@ -19,6 +20,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     name: '',
     email: '',
     avatar: null,
+    role: 'user', // Padrão é usuário comum
   });
 
   const updateUser = (newData: UserData) => {

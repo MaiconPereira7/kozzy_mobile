@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,15 +9,20 @@ import {
   Modal,
   ScrollView,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput, // <--- Importante para edição
+  Alert
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { Ionicons } from '@expo/vector-icons'; 
 import { DrawerScreenProps } from '@react-navigation/drawer';
 import { AppDrawerParamList } from '../routes/AppDrawer';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { UserContext } from '../contexts/UserContext'; // <--- Importar Contexto
 
 // --- TIPO DE DADOS ---
+type Priority = 'Alta' | 'Média' | 'Baixa';
+
 type Ticket = {
   id: string;
   name: string;
@@ -26,148 +31,47 @@ type Ticket = {
   protocol: string;
   clientType: string;
   category: string;
+  priority: Priority; // <--- Novo Campo
   date: string;
   time: string;
   description: string;
 };
 
-// --- DADOS FICTÍCIOS (MOCK) ---
+// --- DADOS FICTÍCIOS ---
 const DUMMY_TICKETS: Ticket[] = [
   {
-    id: '1',
-    name: 'Padaria do João',
-    subject: 'Atraso na entrega de farinha',
-    type: 'ativo',
-    protocol: 'KZ-2024001',
-    clientType: 'Varejo',
-    category: 'Logística',
-    date: '25/10/2023',
-    time: '14:30',
-    description: 'O cliente relata que o pedido #12345 deveria ter chegado pela manhã e ainda não foi entregue. Caminhão está parado no centro.'
+    id: '1', name: 'Padaria do João', subject: 'Atraso na entrega de farinha', type: 'ativo',
+    protocol: 'KZ-2024001', clientType: 'Varejo', category: 'Logística', priority: 'Alta',
+    date: '25/10/2023', time: '14:30', description: 'O cliente relata que o pedido #12345 deveria ter chegado pela manhã e ainda não foi entregue.'
   },
   {
-    id: '2',
-    name: 'Mercado Silva',
-    subject: 'Produto veio danificado',
-    type: 'andamento',
-    protocol: 'KZ-2024002',
-    clientType: 'Atacado',
-    category: 'Qualidade',
-    date: '24/10/2023',
-    time: '09:15',
-    description: 'Caixas de leite chegaram amassadas. Solicitam troca imediata ou crédito na próxima compra.'
+    id: '2', name: 'Mercado Silva', subject: 'Produto veio danificado', type: 'andamento',
+    protocol: 'KZ-2024002', clientType: 'Atacado', category: 'Qualidade', priority: 'Média',
+    date: '24/10/2023', time: '09:15', description: 'Caixas de leite chegaram amassadas. Solicitam troca imediata.'
   },
   {
-    id: '3',
-    name: 'Restaurante Sabor',
-    subject: 'Dúvida sobre boleto',
-    type: 'fechado',
-    protocol: 'KZ-2024003',
-    clientType: 'Food Service',
-    category: 'Financeiro',
-    date: '20/10/2023',
-    time: '16:45',
-    description: 'Cliente não recebeu o boleto por e-mail. Segunda via enviada e confirmada pelo cliente.'
+    id: '3', name: 'Restaurante Sabor', subject: 'Dúvida sobre boleto', type: 'fechado',
+    protocol: 'KZ-2024003', clientType: 'Food Service', category: 'Financeiro', priority: 'Baixa',
+    date: '20/10/2023', time: '16:45', description: 'Cliente não recebeu o boleto por e-mail.'
   },
   {
-    id: '4',
-    name: 'Empório Gourmet',
-    subject: 'Novo pedido urgente',
-    type: 'ativo',
-    protocol: 'KZ-2024004',
-    clientType: 'Varejo',
-    category: 'Vendas',
-    date: '26/10/2023',
-    time: '08:00',
-    description: 'Precisa de reposição de azeites importados para evento no fim de semana. Cliente VIP.'
+    id: '4', name: 'Empório Gourmet', subject: 'Novo pedido urgente', type: 'ativo',
+    protocol: 'KZ-2024004', clientType: 'Varejo', category: 'Vendas', priority: 'Alta',
+    date: '26/10/2023', time: '08:00', description: 'Precisa de reposição de azeites importados para evento no fim de semana.'
   },
-  {
-    id: '5',
-    name: 'Hotel Central',
-    subject: 'Pedido Incompleto',
-    type: 'andamento',
-    protocol: 'KZ-2024005',
-    clientType: 'Hotelaria',
-    category: 'Logística',
-    date: '23/10/2023',
-    time: '11:20',
-    description: 'Faltaram 5 caixas de suco de laranja no pedido entregue hoje. Motorista confirmou a falta no canhoto.'
-  },
-  {
-    id: '6',
-    name: 'Lanchonete da Esquina',
-    subject: 'Troca de produto',
-    type: 'ativo',
-    protocol: 'KZ-2024006',
-    clientType: 'Food Service',
-    category: 'Vendas',
-    date: '26/10/2023',
-    time: '10:10',
-    description: 'Pediu maionese sachê mas recebeu pote de 3kg. Quer realizar a troca antes do almoço.'
-  },
-  {
-    id: '7',
-    name: 'Supermercado Preço Baixo',
-    subject: 'Alteração de endereço',
-    type: 'fechado',
-    protocol: 'KZ-2024007',
-    clientType: 'Atacado',
-    category: 'Cadastro',
-    date: '19/10/2023',
-    time: '15:00',
-    description: 'Solicitação de mudança de endereço de entrega para a nova filial. Atualizado no sistema.'
-  },
-  {
-    id: '8',
-    name: 'Escola Municipal',
-    subject: 'Agendamento de entrega',
-    type: 'ativo',
-    protocol: 'KZ-2024008',
-    clientType: 'Institucional',
-    category: 'Logística',
-    date: '27/10/2023',
-    time: '07:30',
-    description: 'Solicitam que a entrega da merenda seja feita estritamente entre 08:00 e 10:00 devido ao horário do recreio.'
-  },
-  {
-    id: '9',
-    name: 'Buffet Festas & Cia',
-    subject: 'Nota Fiscal com erro',
-    type: 'andamento',
-    protocol: 'KZ-2024009',
-    clientType: 'Eventos',
-    category: 'Financeiro',
-    date: '24/10/2023',
-    time: '13:45',
-    description: 'CNPJ na nota fiscal saiu incorreto. O financeiro já está emitindo a carta de correção.'
-  },
-  {
-    id: '10',
-    name: 'Quiosque da Praia',
-    subject: 'Cancelamento de pedido',
-    type: 'fechado',
-    protocol: 'KZ-2024010',
-    clientType: 'Varejo',
-    category: 'Vendas',
-    date: '18/10/2023',
-    time: '09:00',
-    description: 'Cliente cancelou o pedido de sorvetes devido à previsão de chuva forte no fim de semana.'
-  }
+  // ... adicione mais itens se quiser
 ];
 
 const COLORS = {
   primary: '#e60023', 
   background: '#f8f8f8',
-  cardBg: '#ffffff',
-  textMain: '#333',
-  textLight: '#777',
   statusAtivo: '#e60023',   
   statusAndamento: '#f0ad4e', 
   statusFechado: '#5cb85c',   
 };
 
 const StatusBadge = ({ type }: { type: string }) => {
-  let color = COLORS.textLight;
+  let color = '#777';
   let text = 'Desconhecido';
   let bg = '#EEE';
   if (type === 'ativo') { color = COLORS.statusAtivo; text = 'Aberto'; bg = '#ffebee'; }
@@ -177,6 +81,22 @@ const StatusBadge = ({ type }: { type: string }) => {
     <View style={[styles.badgeContainer, { backgroundColor: bg }]}>
       <View style={[styles.badgeDot, { backgroundColor: color }]} />
       <Text style={[styles.badgeText, { color: color }]}>{text}</Text>
+    </View>
+  );
+};
+
+// Componente visual de Prioridade para o Card
+const PriorityBadge = ({ priority }: { priority?: Priority }) => {
+  const p = priority || 'Média';
+  let color = '#777';
+  let bg = '#eee';
+  if(p === 'Alta') { color = '#d9534f'; bg = '#fde8e8'; }
+  if(p === 'Média') { color = '#f0ad4e'; bg = '#fff7e6'; }
+  if(p === 'Baixa') { color = '#5cb85c'; bg = '#e8f5e9'; }
+
+  return (
+    <View style={{ backgroundColor: bg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, alignSelf: 'flex-start' }}>
+      <Text style={{ color: color, fontSize: 10, fontWeight: 'bold' }}>{p.toUpperCase()}</Text>
     </View>
   );
 };
@@ -191,6 +111,8 @@ const SupportCard = ({ item, onPress }: { item: Ticket, onPress: (ticket: Ticket
         <View>
           <Text style={styles.cardName}>{item.name}</Text>
           <Text style={styles.cardSubject}>{item.subject}</Text>
+          {/* Exibe a prioridade no card */}
+          <PriorityBadge priority={item.priority} />
         </View>
       </View>
       <Text style={styles.timeText}>{item.time}</Text>
@@ -206,48 +128,35 @@ const SupportCard = ({ item, onPress }: { item: Ticket, onPress: (ticket: Ticket
   </TouchableOpacity>
 );
 
-const DetailRow = ({ label, value, icon, isTextArea }: any) => (
-  <View style={styles.detailRowContainer}>
-    <View style={styles.labelRow}>
-      <Ionicons name={icon} size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
-      <Text style={styles.detailLabel}>{label}</Text>
-    </View>
-    <View style={[styles.detailValueContainer, isTextArea && styles.textArea]}>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  </View>
-);
-
 type Props = DrawerScreenProps<AppDrawerParamList, 'Home'>;
 
 const HomeScreen = ({ navigation }: Props) => {
+  const { user } = useContext(UserContext); // Pegamos o user para verificar o papel
   const [activeTab, setActiveTab] = useState('ativos');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   
+  // Estados para edição (Só o Supervisor usa)
+  const [editCategory, setEditCategory] = useState('');
+  const [editPriority, setEditPriority] = useState<Priority>('Média');
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- CARREGAMENTO SIMULADO ---
   const loadDummyData = () => {
     setLoading(true);
-    // Simula um delay de rede de 1 segundo para dar uma sensação realista
     setTimeout(() => {
-      setTickets(DUMMY_TICKETS);
+      // Garante que os dados tenham prioridade
+      const data = DUMMY_TICKETS.map(t => ({...t, priority: t.priority || 'Média'}));
+      setTickets(data as Ticket[]);
       setLoading(false);
       setRefreshing(false);
     }, 1000);
   };
 
-  useEffect(() => {
-    loadDummyData();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadDummyData();
-  };
+  useEffect(() => { loadDummyData(); }, []);
+  const onRefresh = () => { setRefreshing(true); loadDummyData(); };
 
   const filteredTickets = tickets.filter(ticket => {
     if (activeTab === 'ativos') return ticket.type === 'ativo';
@@ -258,7 +167,26 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleCardPress = (ticket: Ticket) => {
     setSelectedTicket(ticket);
+    // Preenche os campos de edição
+    setEditCategory(ticket.category);
+    setEditPriority(ticket.priority);
     setModalVisible(true);
+  };
+
+  const handleSaveSupervisor = () => {
+    if (!selectedTicket) return;
+
+    // Atualiza localmente
+    const newTickets = tickets.map(t => {
+      if (t.id === selectedTicket.id) {
+        return { ...t, category: editCategory, priority: editPriority };
+      }
+      return t;
+    });
+
+    setTickets(newTickets);
+    setModalVisible(false);
+    Alert.alert("Sucesso", "Chamado atualizado pelo Supervisor!");
   };
 
   return (
@@ -266,7 +194,9 @@ const HomeScreen = ({ navigation }: Props) => {
       <View style={styles.headerContainer}>
         <View>
           <Text style={styles.logoText}>KOZZY</Text>
-          <Text style={styles.subLogoText}>Distribuição & Logística</Text>
+          <Text style={styles.subLogoText}>
+            {user.role === 'supervisor' ? 'Painel do Supervisor' : 'Distribuição & Logística'}
+          </Text>
         </View>
         <TouchableOpacity style={styles.menuButton} onPress={() => navigation.openDrawer()}>
           <Feather name="menu" size={24} color="#333" />
@@ -296,10 +226,7 @@ const HomeScreen = ({ navigation }: Props) => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             {loading ? <ActivityIndicator size="large" color={COLORS.primary} /> : (
-              <>
-                <Ionicons name="cube-outline" size={60} color="#CCC" />
-                <Text style={styles.emptyText}>Nenhum chamado nesta lista.</Text>
-              </>
+              <Text style={styles.emptyText}>Nenhum chamado nesta lista.</Text>
             )}
           </View>
         }
@@ -321,13 +248,68 @@ const HomeScreen = ({ navigation }: Props) => {
                    <Text style={styles.highlightName}>{selectedTicket.name}</Text>
                    <Text style={styles.highlightProtocol}>Protocolo: #{selectedTicket.protocol}</Text>
                 </View>
-                <DetailRow icon="calendar-outline" label="Data" value={`${selectedTicket.date} às ${selectedTicket.time}`} />
-                <DetailRow icon="business-outline" label="Segmento" value={selectedTicket.clientType} />
-                <DetailRow icon="pricetag-outline" label="Departamento" value={selectedTicket.category} />
-                <DetailRow icon="clipboard-outline" label="Descrição" value={selectedTicket.description} isTextArea />
-                <TouchableOpacity style={styles.actionButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.actionButtonText}>Fechar</Text>
+
+                {/* VISUALIZAÇÃO DATA */}
+                <View style={styles.detailRowContainer}>
+                   <View style={styles.labelRow}><Ionicons name="calendar-outline" size={18} color={COLORS.primary} /><Text style={styles.detailLabel}> Data</Text></View>
+                   <View style={styles.detailValueContainer}><Text style={styles.detailValue}>{selectedTicket.date} às {selectedTicket.time}</Text></View>
+                </View>
+
+                {/* PRIORIDADE - EDITÁVEL PARA SUPERVISOR */}
+                <View style={styles.detailRowContainer}>
+                   <View style={styles.labelRow}><Ionicons name="alert-circle-outline" size={18} color={COLORS.primary} /><Text style={styles.detailLabel}> Prioridade</Text></View>
+                   
+                   {user.role === 'supervisor' ? (
+                     <View style={styles.prioritySelector}>
+                       {['Alta', 'Média', 'Baixa'].map((p) => (
+                         <TouchableOpacity 
+                           key={p} 
+                           onPress={() => setEditPriority(p as Priority)}
+                           style={[
+                             styles.priorityOption, 
+                             editPriority === p && { backgroundColor: p === 'Alta' ? '#ffebee' : p === 'Média' ? '#fff3e0' : '#e8f5e9', borderWidth: 1, borderColor: p === 'Alta' ? '#d9534f' : p === 'Média' ? '#f0ad4e' : '#5cb85c' }
+                           ]}
+                         >
+                           <Text style={[styles.priorityText, editPriority === p && { fontWeight: 'bold', color: '#333' }]}>{p}</Text>
+                         </TouchableOpacity>
+                       ))}
+                     </View>
+                   ) : (
+                     <View style={styles.detailValueContainer}><Text style={styles.detailValue}>{selectedTicket.priority}</Text></View>
+                   )}
+                </View>
+
+                {/* DEPARTAMENTO - EDITÁVEL PARA SUPERVISOR */}
+                <View style={styles.detailRowContainer}>
+                   <View style={styles.labelRow}><Ionicons name="pricetag-outline" size={18} color={COLORS.primary} /><Text style={styles.detailLabel}> Departamento</Text></View>
+                   {user.role === 'supervisor' ? (
+                     <TextInput 
+                       style={styles.inputEdit} 
+                       value={editCategory} 
+                       onChangeText={setEditCategory}
+                       placeholder="Editar departamento"
+                     />
+                   ) : (
+                     <View style={styles.detailValueContainer}><Text style={styles.detailValue}>{selectedTicket.category}</Text></View>
+                   )}
+                </View>
+
+                {/* DESCRIÇÃO - APENAS LEITURA */}
+                <View style={styles.detailRowContainer}>
+                   <View style={styles.labelRow}><Ionicons name="clipboard-outline" size={18} color={COLORS.primary} /><Text style={styles.detailLabel}> Descrição</Text></View>
+                   <View style={[styles.detailValueContainer, styles.textArea]}><Text style={styles.detailValue}>{selectedTicket.description}</Text></View>
+                </View>
+
+                {user.role === 'supervisor' && (
+                  <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#005bea' }]} onPress={handleSaveSupervisor}>
+                    <Text style={styles.actionButtonText}>Salvar Alterações</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity style={[styles.actionButton, user.role === 'supervisor' && { backgroundColor: '#ccc', marginTop: 10 }]} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.actionButtonText}>{user.role === 'supervisor' ? 'Cancelar' : 'Fechar'}</Text>
                 </TouchableOpacity>
+
               </ScrollView>
             )}
           </View>
@@ -383,6 +365,12 @@ const styles = StyleSheet.create({
   detailValue: { fontSize: 14, color: '#333', lineHeight: 20 },
   actionButton: { backgroundColor: COLORS.primary, padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 30 },
   actionButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  
+  // ESTILOS NOVOS PARA O SUPERVISOR
+  inputEdit: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, fontSize: 14, color: '#333' },
+  prioritySelector: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  priorityOption: { flex: 1, padding: 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#f0f0f0' },
+  priorityText: { color: '#666' }
 });
 
 export default HomeScreen;
