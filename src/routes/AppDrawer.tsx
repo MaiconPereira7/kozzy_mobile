@@ -1,9 +1,9 @@
 // src/routes/AppDrawer.tsx
-import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import HomeScreen from '../screens/HomeScreen';
-import NotificacoesScreen from '../screens/NotificacoesScreen'; 
+import React from 'react';
 import CustomDrawerContent from '../components/CustomDrawerContent';
+import HomeScreen_Part1 from '../screens/HomeScreen_Part1';
+import NotificacoesScreen from '../screens/NotificacoesScreen';
 
 export type AppDrawerParamList = {
   Home: undefined;
@@ -17,19 +17,19 @@ const AppDrawer = () => {
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
-        headerShown: false, 
+        headerShown: false,
         drawerPosition: "right",
       }}
       initialRouteName="Home"
     >
-      <Drawer.Screen 
-        name="Home" 
-        component={HomeScreen} 
+      <Drawer.Screen
+        name="Home"
+        component={HomeScreen}
         options={{ title: 'Central de Atendimento' }}
       />
-      <Drawer.Screen 
-        name="Notificacoes" 
-        component={NotificacoesScreen} 
+      <Drawer.Screen
+        name="Notificacoes"
+        component={NotificacoesScreen}
         options={{ title: 'Notificações' }}
       />
     </Drawer.Navigator>
