@@ -1,7 +1,7 @@
 // src/services/api.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://SEU_IP_AQUI:3000'; // Troque pelo IP do seu servidor
-
+const BASE_URL = 'http://192.168.15.8:3000';
 export interface ApiError {
   message: string;
   code?: number | string;
@@ -15,7 +15,7 @@ export interface ApiResponse<T = any> {
 }
 
 /**
- * Função principal de requisição à API
+ * Função principal de requisição à API com suporte a Token
  */
 export const api = async <T = any>(
   endpoint: string,
@@ -30,13 +30,13 @@ export const api = async <T = any>(
     ...customHeaders,
   };
 
-  // Recupera token se existir (adicione AsyncStorage se necessário)
-  // const token = await AsyncStorage.getItem('@kozzy:token');
-  // if (token) {
-  //   headers['Authorization'] = `Bearer ${token}`;
-  // }
-
   try {
+    // Tenta recuperar o token de autenticação salvo no login
+    const token = await AsyncStorage.getItem('@kozzy:token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
       method,
       headers,
@@ -47,7 +47,6 @@ export const api = async <T = any>(
     try {
       data = await response.json();
     } catch (e) {
-      // Resposta não é JSON
       data = { message: 'Resposta inválida do servidor' };
     }
 
@@ -61,11 +60,10 @@ export const api = async <T = any>(
 
     return data;
   } catch (error: any) {
-    // Erro de rede
+    // Erro de rede (Servidor desligado ou sem internet)
     if (error.message === 'Network request failed' || error.name === 'TypeError') {
       throw {
-        message:
-          'Sem conexão com o servidor. Verifique sua internet e se o servidor está rodando.',
+        message: 'Sem conexão com o servidor. Verifique se o server.js está rodando no PC.',
         code: 'NETWORK_ERROR',
       } as ApiError;
     }
@@ -78,7 +76,6 @@ export const api = async <T = any>(
       } as ApiError;
     }
 
-    // Re-throw se já for ApiError
     throw error;
   }
 };
@@ -99,43 +96,27 @@ export const apiDelete = <T = any>(endpoint: string, headers?: Record<string, st
   api<T>(endpoint, 'DELETE', undefined, headers);
 
 /**
- * Interceptor para tratar erros comuns
+ * Interceptor para tratar erros e exibir mensagens amigáveis no App
  */
 export const handleApiError = (error: ApiError): string => {
-  // Erros de rede
   if (error.code === 'NETWORK_ERROR') {
-    return 'Sem conexão. Verifique sua internet.';
+    return 'Sem conexão. Verifique o servidor Kozzy.';
   }
 
   if (error.code === 'TIMEOUT') {
     return 'Tempo esgotado. Tente novamente.';
   }
 
-  // Erros HTTP
   switch (error.code) {
     case 400:
       return 'Dados inválidos. Verifique as informações.';
     case 401:
-      return 'Não autorizado. Faça login novamente.';
-    case 403:
-      return 'Acesso negado.';
+      return 'Acesso não autorizado. Faça login novamente.';
     case 404:
-      return 'Recurso não encontrado.';
+      return 'Serviço não encontrado no servidor.';
     case 500:
-      return 'Erro no servidor. Tente mais tarde.';
+      return 'Erro interno do servidor. Tente mais tarde.';
     default:
-      return error.message || 'Erro desconhecido';
+      return error.message || 'Ocorreu um erro desconhecido.';
   }
 };
-
-/**
- * Exemplo de uso com tratamento de erro:
- * 
- * try {
- *   const response = await apiPost('/login', { email, password });
- *   console.log(response);
- * } catch (error) {
- *   const message = handleApiError(error as ApiError);
- *   Alert.alert('Erro', message);
- * }
- */

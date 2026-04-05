@@ -1,72 +1,124 @@
-import { useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useUser } from '../contexts/UserContext';
-import { apiPost } from '../services/api';
-import { COLORS } from '../theme/colors';
+// src/services/api.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface Message {
-    id: string;
-    text: string;
-    sender: 'user' | 'bot';
+// IMPORTANTE: Substitua pelo IP da sua máquina na rede local (ex: 192.168.1.5)
+const BASE_URL = 'http://192.168.x.x:3000';
+
+export interface ApiError {
+    message: string;
+    code?: number | string;
+    details?: any;
 }
 
-export const ChatScreen = () => {
-    const { user } = useUser();
-    const [messages, setMessages] = useState<Message[]>([
-        { id: '1', text: `Olá ${user?.name || 'Maicon'}! Como a Kozzy pode te ajudar hoje?`, sender: 'bot' }
-    ]);
-    const [inputText, setInputText] = useState('');
-    const flatListRef = useRef<FlatList>(null);
+export interface ApiResponse<T = any> {
+    success: boolean;
+    data?: T;
+    message?: string;
+}
 
-    const sendMessage = async () => {
-        if (!inputText.trim()) return;
+/**
+ * Função principal de requisição à API com suporte a Token
+ */
+export const api = async <T = any>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    body?: any,
+    customHeaders?: Record<string, string>
+): Promise<T> => {
+    const url = `${BASE_URL}${endpoint}`;
 
-        const userMsg: Message = { id: Date.now().toString(), text: inputText, sender: 'user' };
-        setMessages(prev => [...prev, userMsg]);
-        setInputText('');
-
-        try {
-            // Chama a nova rota do chatbot no seu server.js
-            const response = await apiPost('/chatbot', { message: inputText, userId: user?.id });
-            const botMsg: Message = { id: response.id, text: response.text, sender: 'bot' };
-            setMessages(prev => [...prev, botMsg]);
-        } catch (error) {
-            setMessages(prev => [...prev, { id: 'err', text: 'Erro de conexão com a Central.', sender: 'bot' }]);
-        }
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...customHeaders,
     };
 
-    return (
-        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <View style={[styles.bubble, item.sender === 'user' ? styles.userBubble : styles.botBubble]}>
-                        <Text style={item.sender === 'user' ? styles.userText : styles.botText}>{item.text}</Text>
-                    </View>
-                )}
-                contentContainerStyle={{ padding: 15 }}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-            />
-            <View style={styles.inputContainer}>
-                <TextInput style={styles.input} value={inputText} onChangeText={setInputText} placeholder="Digite sua dúvida..." />
-                <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-                    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Enviar</Text>
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
-    );
+    try {
+        // Tenta recuperar o token de autenticação salvo no login
+        const token = await AsyncStorage.getItem('@kozzy:token');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+        });
+
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = { message: 'Resposta inválida do servidor' };
+        }
+
+        if (!response.ok) {
+            throw {
+                message: data.message || 'Erro na requisição',
+                code: response.status,
+                details: data,
+            } as ApiError;
+        }
+
+        return data;
+    } catch (error: any) {
+        // Erro de rede (Servidor desligado ou sem internet)
+        if (error.message === 'Network request failed' || error.name === 'TypeError') {
+            throw {
+                message: 'Sem conexão com o servidor. Verifique se o server.js está rodando no PC.',
+                code: 'NETWORK_ERROR',
+            } as ApiError;
+        }
+
+        // Timeout
+        if (error.name === 'AbortError') {
+            throw {
+                message: 'Tempo de resposta excedido. Tente novamente.',
+                code: 'TIMEOUT',
+            } as ApiError;
+        }
+
+        throw error;
+    }
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.background },
-    bubble: { padding: 12, borderRadius: 18, marginBottom: 10, maxWidth: '80%' },
-    userBubble: { alignSelf: 'flex-end', backgroundColor: COLORS.primary }, // Vermelho Kozzy
-    botBubble: { alignSelf: 'flex-start', backgroundColor: '#E1E1E1' },
-    userText: { color: COLORS.white },
-    botText: { color: COLORS.text.primary },
-    inputContainer: { flexDirection: 'row', padding: 10, backgroundColor: '#FFF', borderTopWidth: 1, borderColor: '#EEE' },
-    input: { flex: 1, height: 45, borderWidth: 1, borderColor: '#DDD', borderRadius: 22, paddingHorizontal: 15 },
-    sendButton: { marginLeft: 10, backgroundColor: COLORS.primary, borderRadius: 22, justifyContent: 'center', paddingHorizontal: 15 }
-});
+/**
+ * Funções de conveniência
+ */
+export const apiGet = <T = any>(endpoint: string, headers?: Record<string, string>) =>
+    api<T>(endpoint, 'GET', undefined, headers);
+
+export const apiPost = <T = any>(endpoint: string, body: any, headers?: Record<string, string>) =>
+    api<T>(endpoint, 'POST', body, headers);
+
+export const apiPut = <T = any>(endpoint: string, body: any, headers?: Record<string, string>) =>
+    api<T>(endpoint, 'PUT', body, headers);
+
+export const apiDelete = <T = any>(endpoint: string, headers?: Record<string, string>) =>
+    api<T>(endpoint, 'DELETE', undefined, headers);
+
+/**
+ * Interceptor para tratar erros e exibir mensagens amigáveis no App
+ */
+export const handleApiError = (error: ApiError): string => {
+    if (error.code === 'NETWORK_ERROR') {
+        return 'Sem conexão. Verifique o servidor Kozzy.';
+    }
+
+    if (error.code === 'TIMEOUT') {
+        return 'Tempo esgotado. Tente novamente.';
+    }
+
+    switch (error.code) {
+        case 400:
+            return 'Dados inválidos. Verifique as informações.';
+        case 401:
+            return 'Acesso não autorizado. Faça login novamente.';
+        case 404:
+            return 'Serviço não encontrado no servidor.';
+        case 500:
+            return 'Erro interno do servidor. Tente mais tarde.';
+        default:
+            return error.message || 'Ocorreu um erro desconhecido.';
+    }
+};

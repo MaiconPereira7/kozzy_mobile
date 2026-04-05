@@ -1,6 +1,7 @@
+// src/routes/AppDrawer.tsx
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { CustomDrawerContent } from '../components/CustomDrawerContent';
-import { ChatScreen } from '../screens/ChatScreen'; // Importe a nova tela
+import { ChatScreen } from '../screens/ChatScreen';
 import { NotificacoesScreen } from '../screens/NotificacoesScreen';
 
 export type AppDrawerParamList = {
@@ -15,17 +16,21 @@ export const AppDrawer = () => {
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
-        headerShown: true, // Agora mostramos o cabeçalho
+        headerShown: true, // Habilitado para exibir o título no topo
         drawerPosition: "right",
       }}
-      initialRouteName="HomeChat" // Chat como tela inicial
+      initialRouteName="HomeChat"
     >
       <Drawer.Screen
         name="HomeChat"
         component={ChatScreen}
         options={{ title: 'Central Kozzy' }}
       />
-      <Drawer.Screen name="Notificacoes" component={NotificacoesScreen} />
+      <Drawer.Screen
+        name="Notificacoes"
+        component={NotificacoesScreen}
+        options={{ title: 'Notificações' }}
+      />
     </Drawer.Navigator>
   );
 };
