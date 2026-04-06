@@ -1,29 +1,49 @@
-// maiconpereira7/kozzy_mobile/server.js
+// server.js
+const express = require('express');
+const cors = require('cors');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// ... (Mantenha as suas importações e a rota de login existentes)
+const app = express();
 
-// --- ROTA DO CHATBOT ---
-app.post('/chatbot', async (req, res) => {
-  const { message } = req.body;
-  const msg = message ? message.toLowerCase() : "";
-  let reply = "";
+// --- CONFIGURAÇÃO OBRIGATÓRIA (MIDDLEWARES) ---
+app.use(cors()); // Libera o acesso do celular ao PC
+app.use(express.json()); // <--- ISSO RESOLVE O ERRO DO 'BODY' UNDEFINED
+app.use(express.urlencoded({ extended: true }));
 
-  if (msg.includes("olá") || msg.includes("oi")) {
-    reply = "Olá! Eu sou o assistente virtual da Kozzy. Como posso ajudar com os seus pedidos hoje?";
-  } else if (msg.includes("ticket") || msg.includes("problema") || msg.includes("ajuda")) {
-    reply = "Entendido. Posso abrir um ticket de suporte para si. Por favor, descreva o problema.";
-  } else if (msg.includes("atendente") || msg.includes("humano")) {
-    reply = "Estou a transferir a sua solicitação para um dos nossos consultores. Aguarde um momento.";
-  } else {
-    reply = "Desculpe, não entendi. Tente dizer 'Abrir Ticket' ou 'Falar com Atendente'.";
-  }
+// Substitua pela sua chave do Google AI Studio (https://aistudio.google.com/)
+const API_KEY = "SUA_API_KEY_AQUI"; 
+const genAI = new GoogleGenerativeAI(API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  res.json({
-    id: Date.now().toString(),
-    text: reply,
-    sender: 'bot'
-  });
+app.post('/chat', async (req, res) => {
+    try {
+        // Validação de segurança para não quebrar o server
+        if (!req.body || !req.body.message) {
+            return res.status(400).json({ error: "Mensagem vazia!" });
+        }
+
+        const { message, userName } = req.body;
+        console.log(`Mensagem recebida de ${userName}: ${message}`);
+
+        const prompt = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. 
+        Seu objetivo é ajudar o cliente ${userName}.
+        Seja educada, profissional e use emojis moderadamente.
+        Se ele quiser abrir um ticket, peça a área e a descrição.
+        Mensagem do usuário: ${message}`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        res.json({ response: text });
+
+    } catch (error) {
+        console.error("Erro no Gemini:", error);
+        res.status(500).json({ error: "Erro ao processar IA" });
+    }
 });
 
-// Certifique-se de que o servidor ouve em 0.0.0.0 para acesso mobile
-app.listen(3000, '0.0.0.0', () => console.log('🚀 SERVIDOR KOZZY RODANDO!'));
+const PORT = 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Servidor Kozzy rodando em http://localhost:${PORT}`);
+});
