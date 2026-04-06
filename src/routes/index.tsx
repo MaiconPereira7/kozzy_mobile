@@ -1,18 +1,15 @@
-// src/routes/index.tsx
-import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from 'react';
 
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import LoginScreen from '../screens/LoginScreen';
-// import RegistrationScreen from '../screens/RegistrationScreen'; // <--- REMOVIDO
-import AppDrawer from './AppDrawer';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'; 
+import { NotificacoesScreen } from '../screens/NotificacoesScreen'; // <--- CORRIGIDO: Adicionadas as chavetas aqui!
 import ProfileScreen from '../screens/ProfileScreen';
-import NotificacoesScreen from '../screens/NotificacoesScreen';
+import { AppDrawer } from './AppDrawer';
 
 export type RootStackParamList = {
   Login: undefined;
-  // Register: undefined; // <--- REMOVIDO
   ForgotPassword: undefined;
   App: undefined;
   Profile: undefined;
@@ -29,11 +26,10 @@ const AppRoutes = () => {
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
-        {/* <Stack.Screen name="Register" component={RegistrationScreen} /> */}
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="App" component={AppDrawer} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="Notifications" component={NotificacoesScreen} />
+        <Stack.Screen name="Notifications" component={NotificacoesScreen as any} />
       </Stack.Navigator>
     </NavigationContainer>
   );

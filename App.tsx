@@ -1,17 +1,15 @@
-import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import 'react-native-gesture-handler'; // Deve ser a primeira linha
-import { AppDrawer } from './src/routes/AppDrawer';
+import 'react-native-gesture-handler';
+import { UserProvider } from './src/contexts/UserContext'; // <--- Importação vital
+import AppRoutes from './src/routes';
 
 export default function App() {
   return (
-    <NavigationContainer>
-      {/* Define o estilo da barra de status (hora, bateria, etc) */}
+    // O Provider TEM que envolver as Rotas
+    <UserProvider>
       <StatusBar style="auto" />
-
-      {/* Carrega o menu lateral e as telas que configuramos */}
-      <AppDrawer />
-    </NavigationContainer>
+      <AppRoutes />
+    </UserProvider>
   );
 }

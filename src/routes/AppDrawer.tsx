@@ -1,7 +1,9 @@
 import { createDrawerNavigator } from '@react-navigation/drawer';
+import React from 'react';
 
 import { CustomDrawerContent } from '../components/CustomDrawerContent';
-import { ChatScreen } from '../screens/ChatScreen'; // Importação corrigida
+// ADICIONE AS CHAVES AQUI:
+import { ChatScreen } from '../screens/ChatScreen';
 import { NotificacoesScreen } from '../screens/NotificacoesScreen';
 
 export type AppDrawerParamList = {
@@ -16,7 +18,7 @@ export const AppDrawer = () => {
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
-        headerShown: true, // Mostra o título "Central Kozzy" no topo
+        headerShown: true,
         drawerPosition: "right",
       }}
       initialRouteName="Central"
