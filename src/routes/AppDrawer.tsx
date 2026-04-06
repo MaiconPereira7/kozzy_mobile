@@ -1,11 +1,11 @@
-// src/routes/AppDrawer.tsx
 import { createDrawerNavigator } from '@react-navigation/drawer';
+
 import { CustomDrawerContent } from '../components/CustomDrawerContent';
-import { ChatScreen } from '../screens/ChatScreen';
+import { ChatScreen } from '../screens/ChatScreen'; // Importação corrigida
 import { NotificacoesScreen } from '../screens/NotificacoesScreen';
 
 export type AppDrawerParamList = {
-  HomeChat: undefined;
+  Central: undefined;
   Notificacoes: undefined;
 };
 
@@ -16,13 +16,13 @@ export const AppDrawer = () => {
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
-        headerShown: true, // Habilitado para exibir o título no topo
+        headerShown: true, // Mostra o título "Central Kozzy" no topo
         drawerPosition: "right",
       }}
-      initialRouteName="HomeChat"
+      initialRouteName="Central"
     >
       <Drawer.Screen
-        name="HomeChat"
+        name="Central"
         component={ChatScreen}
         options={{ title: 'Central Kozzy' }}
       />
