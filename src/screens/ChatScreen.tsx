@@ -1,84 +1,136 @@
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    KeyboardAvoidingView, Platform, SafeAreaView,
+    KeyboardAvoidingView,
+    Platform,
     ScrollView,
+    StatusBar,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import { useUser } from '../contexts/UserContext';
 import { apiPost } from '../services/api';
 
+type Message = {
+    id: string;
+    text: string;
+    type: 'user' | 'bot';
+    time: string;
+};
+
+type QuickAction = {
+    label: string;
+    icon: any;
+    color: string;
+    bg: string;
+    action: 'navigate' | 'message';
+    target?: string;
+    message?: string;
+};
+
+const QUICK_ACTIONS: QuickAction[] = [
+    {
+        label: 'Abrir Ticket',
+        icon: 'ticket-outline',
+        color: '#E01E26',
+        bg: '#FFF0F0',
+        action: 'navigate',
+        target: 'AbrirTicket',
+    },
+    {
+        label: 'Meus Tickets',
+        icon: 'list-outline',
+        color: '#3B82F6',
+        bg: '#EFF6FF',
+        action: 'navigate',
+        target: 'MeusTickets',
+    },
+    {
+        label: 'Problema no Pedido',
+        icon: 'cube-outline',
+        color: '#F59E0B',
+        bg: '#FFFBEB',
+        action: 'navigate',
+        target: 'AbrirTicket',
+    },
+    {
+        label: 'Falar com Consultor',
+        icon: 'headset-outline',
+        color: '#10B981',
+        bg: '#ECFDF5',
+        action: 'message',
+        message: 'Gostaria de falar com um consultor humano.',
+    },
+];
+
+const getNow = () => {
+    const d = new Date();
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+};
+
 export const ChatScreen = () => {
     const { user } = useUser();
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // MENSAGENS INICIAIS
-    const [messages, setMessages] = useState([
-        { id: '1', text: `Olá, ${user?.name || 'Maicon'}! 👋\nSou a Kozzy. Como posso ajudar a Kozzy Alimentos hoje?`, type: 'bot' }
+    const firstName = user?.name?.split(' ')[0] || 'você';
+
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            id: '1',
+            text: `Olá, ${firstName}! 👋 Sou a Kozzy, assistente virtual da Kozzy Alimentos.\n\nComo posso te ajudar hoje?`,
+            type: 'bot',
+            time: getNow(),
+        },
     ]);
 
     useEffect(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }, [messages]);
 
     const addMessage = (text: string, type: 'user' | 'bot') => {
-        setMessages(prev => [...prev, { id: Math.random().toString(), text, type }]);
+        setMessages(prev => [...prev, { id: Math.random().toString(), text, type, time: getNow() }]);
     };
 
-    // LÓGICA DE ATENDIMENTO COM IA (GEMINI)
-    const handleSend = async (override?: string) => {
-        const texto = override || inputText;
-        if (!texto.trim()) return;
-
-        // Se o utilizador clicou no botão "Ver meus tickets", navega para o ecrã em vez de falar com a IA
-        if (texto === 'Ver meus tickets') {
-            navigation.navigate('MeusTickets' as never);
-            return;
+    const handleQuickAction = (action: QuickAction) => {
+        if (action.action === 'navigate' && action.target) {
+            navigation.navigate(action.target);
+        } else if (action.action === 'message' && action.message) {
+            handleSend(action.message);
         }
+    };
 
-        // 1. Adiciona a mensagem do utilizador ao ecrã
+    const handleSend = async (override?: string) => {
+        const texto = (override || inputText).trim();
+        if (!texto) return;
+
         addMessage(texto, 'user');
         setInputText('');
         setIsLoading(true);
 
         try {
-            // 2. Faz o pedido ao nosso servidor Node.js
             const response = await apiPost('/chat', {
                 message: texto,
-                userName: user?.name || 'Maicon'
+                userName: user?.name || 'Usuário',
             });
 
-            // 3. Adiciona a resposta da IA ao ecrã
-            if (response && response.response) {
+            if (response?.response) {
                 addMessage(response.response, 'bot');
             } else {
-                addMessage("Desculpe, não consegui compreender a resposta do servidor.", 'bot');
+                addMessage('Desculpe, não consegui processar sua mensagem. Tente novamente.', 'bot');
             }
-
         } catch (error: any) {
-            console.error("Erro no Chat:", error);
-
-            // Lógica para extrair a mensagem de erro real e evitar o [object Object]
-            let textoErro = 'Falha na comunicação com o servidor. Verifique se o seu PC e o telemóvel estão na mesma rede Wi-Fi e se o IP está correto no ficheiro api.ts.';
-
-            if (typeof error === 'string') {
-                textoErro = error;
-            } else if (error && error.message) {
-                textoErro = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
-            } else if (error && error.code === 'NETWORK_ERROR') {
-                textoErro = 'Sem conexão ao servidor local. Verifique o seu IP.';
-            }
-
-            addMessage(`❌ Erro: ${textoErro}`, 'bot');
+            let textoErro = 'Sem conexão com o servidor. Verifique se o servidor está rodando.';
+            if (typeof error === 'string') textoErro = error;
+            else if (error?.message && typeof error.message === 'string') textoErro = error.message;
+            addMessage(`❌ ${textoErro}`, 'bot');
         } finally {
             setIsLoading(false);
         }
@@ -86,85 +138,129 @@ export const ChatScreen = () => {
 
     return (
         <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#E01E26" />
+
             {/* HEADER */}
             <View style={styles.header}>
-                <SafeAreaView style={styles.headerContent}>
+                <View style={styles.headerInner}>
                     <View style={styles.headerLeft}>
-                        <View style={styles.avatar}><Text style={styles.avatarText}>KZ</Text></View>
+                        <View style={styles.headerAvatar}>
+                            <Text style={styles.headerAvatarText}>KZ</Text>
+                        </View>
                         <View>
                             <Text style={styles.headerTitle}>Central Kozzy</Text>
-                            <View style={styles.statusRow}><View style={styles.dot} /><Text style={styles.statusText}>Online</Text></View>
+                            <View style={styles.onlineRow}>
+                                <View style={styles.onlineDot} />
+                                <Text style={styles.onlineText}>Assistente Online</Text>
+                            </View>
                         </View>
                     </View>
-                    <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}>
-                        <Ionicons name="menu-outline" size={36} color="#FFF" />
+                    <TouchableOpacity
+                        onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
+                        style={styles.menuBtn}
+                    >
+                        <Ionicons name="menu-outline" size={28} color="#FFF" />
                     </TouchableOpacity>
-                </SafeAreaView>
+                </View>
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
-
-                    <View style={styles.welcomeCard}>
-                        <Text style={styles.welcomeTitle}>Olá, {user?.name || 'Maicon'}! 👋</Text>
-                        <Text style={styles.welcomeBody}>Como posso ajudar a Kozzy Alimentos hoje?</Text>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={{ flex: 1 }}
+            >
+                <ScrollView
+                    ref={scrollViewRef}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* AÇÕES RÁPIDAS */}
+                    <View style={styles.actionsSection}>
+                        <Text style={styles.actionsLabel}>ACESSO RÁPIDO</Text>
+                        <View style={styles.actionsGrid}>
+                            {QUICK_ACTIONS.map((action) => (
+                                <TouchableOpacity
+                                    key={action.label}
+                                    style={[styles.actionBtn, { backgroundColor: action.bg }]}
+                                    onPress={() => handleQuickAction(action)}
+                                    activeOpacity={0.75}
+                                >
+                                    <View style={[styles.actionIconWrap, { backgroundColor: action.color + '20' }]}>
+                                        <Ionicons name={action.icon} size={22} color={action.color} />
+                                    </View>
+                                    <Text style={[styles.actionLabel, { color: action.color }]}>{action.label}</Text>
+                                    <Ionicons name="chevron-forward" size={14} color={action.color + '80'} />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
 
-                    <Text style={styles.sectionLabel}>OPÇÕES RÁPIDAS</Text>
-
-                    <View style={styles.grid}>
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#1E1E1E' }]} onPress={() => handleSend('Gostaria de abrir um ticket para suporte.')}>
-                            <Ionicons name="ticket-outline" size={24} color="#FFF" />
-                            <Text style={styles.btnText}>Abrir ticket</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#334155' }]} onPress={() => handleSend('Ver meus tickets')}>
-                            <Ionicons name="list-outline" size={24} color="#FFF" />
-                            <Text style={styles.btnText}>Ver meus tickets</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#7E3AF2' }]} onPress={() => handleSend('Tenho um problema no meu pedido.')}>
-                            <Ionicons name="cube-outline" size={24} color="#FFF" />
-                            <Text style={styles.btnText}>Problema no pedido</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#057A55' }]} onPress={() => handleSend('Gostaria de falar com um consultor.')}>
-                            <Ionicons name="person-outline" size={24} color="#FFF" />
-                            <Text style={styles.btnText}>Falar com consultor</Text>
-                        </TouchableOpacity>
+                    {/* DIVISOR */}
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>conversa</Text>
+                        <View style={styles.dividerLine} />
                     </View>
 
-                    <Text style={styles.dateDivider}>hoje</Text>
-
+                    {/* MENSAGENS */}
                     {messages.map((msg) => (
-                        <View key={msg.id} style={msg.type === 'bot' ? styles.botMsgWrapper : styles.userMsgWrapper}>
-                            <View style={msg.type === 'bot' ? styles.botMsg : styles.userMsg}>
-                                <Text style={msg.type === 'bot' ? styles.botMsgText : styles.userMsgText}>{msg.text}</Text>
+                        <View
+                            key={msg.id}
+                            style={msg.type === 'bot' ? styles.botRow : styles.userRow}
+                        >
+                            {msg.type === 'bot' && (
+                                <View style={styles.botAvatar}>
+                                    <Text style={styles.botAvatarText}>KZ</Text>
+                                </View>
+                            )}
+                            <View style={styles.msgColumn}>
+                                <View style={msg.type === 'bot' ? styles.botBubble : styles.userBubble}>
+                                    <Text style={msg.type === 'bot' ? styles.botText : styles.userText}>
+                                        {msg.text}
+                                    </Text>
+                                </View>
+                                <Text style={[styles.msgTime, msg.type === 'user' && { textAlign: 'right' }]}>
+                                    {msg.time}
+                                </Text>
                             </View>
                         </View>
                     ))}
 
-                    {/* Indicador de carregamento enquanto a IA pensa */}
+                    {/* LOADING */}
                     {isLoading && (
-                        <View style={styles.botMsgWrapper}>
-                            <View style={[styles.botMsg, { padding: 10 }]}>
+                        <View style={styles.botRow}>
+                            <View style={styles.botAvatar}>
+                                <Text style={styles.botAvatarText}>KZ</Text>
+                            </View>
+                            <View style={styles.typingBubble}>
                                 <ActivityIndicator size="small" color="#E01E26" />
+                                <Text style={styles.typingText}>Digitando...</Text>
                             </View>
                         </View>
                     )}
+
+                    <View style={{ height: 12 }} />
                 </ScrollView>
 
+                {/* INPUT */}
                 <View style={styles.inputArea}>
-                    <View style={styles.inputContainer}>
+                    <View style={styles.inputRow}>
                         <TextInput
-                            placeholder="Digite aqui..."
                             style={styles.input}
+                            placeholder="Digite sua mensagem..."
+                            placeholderTextColor="#BBB"
                             value={inputText}
                             onChangeText={setInputText}
                             editable={!isLoading}
+                            multiline
+                            maxLength={500}
+                            onSubmitEditing={() => handleSend()}
                         />
-                        <TouchableOpacity onPress={() => handleSend()} disabled={isLoading}>
-                            <Ionicons name="send" size={24} color={isLoading ? "#CCC" : "#E01E26"} />
+                        <TouchableOpacity
+                            style={[styles.sendBtn, (!inputText.trim() || isLoading) && styles.sendBtnDisabled]}
+                            onPress={() => handleSend()}
+                            disabled={!inputText.trim() || isLoading}
+                        >
+                            <Ionicons name="send" size={18} color="#FFF" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -174,34 +270,107 @@ export const ChatScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FA' },
-    header: { backgroundColor: '#E01E26', paddingBottom: 20, borderBottomLeftRadius: 25, borderBottomRightRadius: 25 },
-    headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Platform.OS === 'android' ? 40 : 0, paddingHorizontal: 20 },
+    container: { flex: 1, backgroundColor: '#F7F8FA' },
+
+    // Header
+    header: {
+        backgroundColor: '#E01E26',
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 8 : 54,
+        paddingBottom: 16,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+    },
+    headerInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
-    avatar: { width: 45, height: 45, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-    avatarText: { color: '#FFF', fontWeight: 'bold' },
-    headerTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    statusRow: { flexDirection: 'row', alignItems: 'center' },
-    dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2ECC71', marginRight: 6 },
-    statusText: { color: '#EEE', fontSize: 12 },
-    scrollContent: { padding: 15 },
-    welcomeCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 15, marginBottom: 20, elevation: 2 },
-    welcomeTitle: { fontSize: 18, fontWeight: 'bold', color: '#E01E26' },
-    welcomeBody: { color: '#666', marginTop: 5 },
-    sectionLabel: { fontSize: 11, fontWeight: 'bold', color: '#AAA', textAlign: 'center', marginBottom: 15 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    btn: { width: '48%', height: 90, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12, elevation: 3 },
-    btnText: { color: '#FFF', fontWeight: 'bold', fontSize: 12, marginTop: 5 },
-    dateDivider: { textAlign: 'center', color: '#CCC', marginVertical: 20, fontSize: 12 },
-    botMsgWrapper: { alignSelf: 'flex-start', marginBottom: 15, maxWidth: '85%' },
-    botMsg: { backgroundColor: '#FFF', padding: 15, borderRadius: 18, borderTopLeftRadius: 2, elevation: 1 },
-    botMsgText: { color: '#333', fontSize: 15 },
-    userMsgWrapper: { alignSelf: 'flex-end', marginBottom: 15, maxWidth: '85%' },
-    userMsg: { backgroundColor: '#E01E26', padding: 15, borderRadius: 18, borderTopRightRadius: 2 },
-    userMsgText: { color: '#FFF', fontSize: 15 },
-    inputArea: { backgroundColor: '#FFF', padding: 15, borderTopWidth: 1, borderTopColor: '#EEE' },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F2F2F2', borderRadius: 30, paddingHorizontal: 15, height: 50 },
-    input: { flex: 1, fontSize: 16 }
+    headerAvatar: {
+        width: 42, height: 42, borderRadius: 21,
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        justifyContent: 'center', alignItems: 'center', marginRight: 12,
+    },
+    headerAvatarText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+    onlineRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+    onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ADE80', marginRight: 5 },
+    onlineText: { color: 'rgba(255,255,255,0.85)', fontSize: 12 },
+    menuBtn: { padding: 4 },
+
+    scrollContent: { padding: 16 },
+
+    // Ações rápidas
+    actionsSection: { marginBottom: 8 },
+    actionsLabel: {
+        fontSize: 10, fontWeight: '800', color: '#CCC',
+        letterSpacing: 1.5, marginBottom: 12, marginLeft: 2,
+    },
+    actionsGrid: { gap: 8 },
+    actionBtn: {
+        flexDirection: 'row', alignItems: 'center',
+        borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+    },
+    actionIconWrap: {
+        width: 38, height: 38, borderRadius: 10,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    actionLabel: { flex: 1, fontSize: 14, fontWeight: '600' },
+
+    // Divisor
+    dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 10 },
+    dividerLine: { flex: 1, height: 1, backgroundColor: '#E8E8E8' },
+    dividerText: { fontSize: 11, color: '#CCC', fontWeight: '600' },
+
+    // Mensagens
+    botRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 16, gap: 8 },
+    userRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 },
+    botAvatar: {
+        width: 30, height: 30, borderRadius: 15,
+        backgroundColor: '#E01E26', justifyContent: 'center', alignItems: 'center',
+        marginBottom: 16,
+    },
+    botAvatarText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
+    msgColumn: { flex: 1, maxWidth: '85%' },
+    botBubble: {
+        backgroundColor: '#FFF', padding: 14, borderRadius: 18,
+        borderBottomLeftRadius: 4,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
+    },
+    userBubble: {
+        backgroundColor: '#E01E26', padding: 14, borderRadius: 18,
+        borderBottomRightRadius: 4, alignSelf: 'flex-end',
+    },
+    botText: { color: '#333', fontSize: 14, lineHeight: 20 },
+    userText: { color: '#FFF', fontSize: 14, lineHeight: 20 },
+    msgTime: { fontSize: 10, color: '#CCC', marginTop: 4, marginHorizontal: 4 },
+
+    // Typing
+    typingBubble: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: '#FFF', paddingHorizontal: 14, paddingVertical: 12,
+        borderRadius: 18, borderBottomLeftRadius: 4,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
+    },
+    typingText: { color: '#BBB', fontSize: 13 },
+
+    // Input
+    inputArea: {
+        backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12,
+        borderTopWidth: 1, borderTopColor: '#F0F0F0',
+        paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    },
+    inputRow: {
+        flexDirection: 'row', alignItems: 'flex-end',
+        backgroundColor: '#F7F8FA', borderRadius: 24,
+        borderWidth: 1, borderColor: '#EBEBEB',
+        paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8,
+    },
+    input: { flex: 1, fontSize: 15, color: '#222', maxHeight: 100, paddingTop: 6, paddingBottom: 6 },
+    sendBtn: {
+        width: 38, height: 38, borderRadius: 19,
+        backgroundColor: '#E01E26', justifyContent: 'center', alignItems: 'center',
+    },
+    sendBtnDisabled: { backgroundColor: '#F0B0B3' },
 });
 
 export default ChatScreen;

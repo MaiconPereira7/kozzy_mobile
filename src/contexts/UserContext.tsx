@@ -1,33 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// CORREÇÃO AQUI: Adicionado o "React" na importação
-import { createContext, ReactNode, useContext, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useState } from 'react';
 
-// Define a estrutura do usuário
 interface User {
   id: string;
   name: string;
   email: string;
-  avatar: string | null;
-  role: 'user' | 'supervisor';
+  avatar?: string | null;
+  role: 'user' | 'supervisor' | 'admin';
+  token?: string;
 }
 
-// Define o que o contexto vai oferecer para as telas
 interface UserContextData {
   user: User | null;
-  login: (userData: User, token: string) => Promise<void>;
+  login: (userData: User) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
 }
 
-const UserContext = createContext<UserContextData>({} as UserContextData);
+export const UserContext = createContext<UserContextData>({} as UserContextData);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
 
-  // Função de Login (Simulada para aceitar o Mock)
-  const login = async (userData: User, token: string) => {
+  const login = async (userData: User) => {
     try {
       setUser(userData);
-      await AsyncStorage.setItem('@Kozzy:token', token);
+      if (userData.token) {
+        await AsyncStorage.setItem('@Kozzy:token', userData.token);
+      }
       await AsyncStorage.setItem('@Kozzy:user', JSON.stringify(userData));
     } catch (error) {
       console.error('Erro ao salvar dados de login:', error);
@@ -37,7 +37,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       setUser(null);
-      // Removido o .clear() perigoso e alterado para remover apenas os dados do usuário
       await AsyncStorage.removeItem('@Kozzy:token');
       await AsyncStorage.removeItem('@Kozzy:user');
     } catch (error) {
@@ -45,18 +44,19 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    setUser(prev => (prev ? { ...prev, ...userData } : prev));
+  };
+
   return (
-    <UserContext.Provider value={{ user, login, logout }}>
+    <UserContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
     </UserContext.Provider>
   );
 };
 
-// Hook para usar o contexto facilmente
 export const useUser = () => {
   const context = useContext(UserContext);
-  if (!context) {
-    throw new Error('useUser deve ser usado dentro de um UserProvider');
-  }
+  if (!context) throw new Error('useUser deve ser usado dentro de um UserProvider');
   return context;
 };

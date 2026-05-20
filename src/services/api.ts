@@ -32,7 +32,7 @@ export const api = async <T = any>(
 
   try {
     // Tenta recuperar o token de autenticação salvo no login
-    const token = await AsyncStorage.getItem('@kozzy:token');
+    const token = await AsyncStorage.getItem('@Kozzy:token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
