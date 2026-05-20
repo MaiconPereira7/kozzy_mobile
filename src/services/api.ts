@@ -1,7 +1,7 @@
 // src/services/api.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.15.8:3000';
+const BASE_URL = 'http://192.168.15.4:3000';
 export interface ApiError {
   message: string;
   code?: number | string;

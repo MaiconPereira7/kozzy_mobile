@@ -1,14 +1,10 @@
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import 'react-native-gesture-handler';
-import { UserProvider } from './src/contexts/UserContext'; // <--- Importação vital
-import AppRoutes from './src/routes';
+import { UserProvider } from './src/contexts/UserContext';
+import AppRoutes from './src/routes'; // ou o caminho correto das suas rotas
 
 export default function App() {
   return (
-    // O Provider TEM que envolver as Rotas
+    // O UserProvider tem de envolver o seu aplicativo!
     <UserProvider>
-      <StatusBar style="auto" />
       <AppRoutes />
     </UserProvider>
   );

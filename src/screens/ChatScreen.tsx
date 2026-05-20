@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView, Platform, SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -11,42 +12,19 @@ import {
     View
 } from 'react-native';
 import { useUser } from '../contexts/UserContext';
+import { apiPost } from '../services/api';
 
 export const ChatScreen = () => {
     const { user } = useUser();
     const navigation = useNavigation();
     const [inputText, setInputText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // MENSAGENS
+    // MENSAGENS INICIAIS
     const [messages, setMessages] = useState([
         { id: '1', text: `Olá, ${user?.name || 'Maicon'}! 👋\nSou a Kozzy. Como posso ajudar a Kozzy Alimentos hoje?`, type: 'bot' }
     ]);
-
-    // ESTADO DO FORMULÁRIO DO TICKET
-    const [fluxo, setFluxo] = useState<{
-        ativo: boolean;
-        etapa: 'tipo_cliente' | 'area' | 'descricao' | 'finalizado';
-        dados: {
-            origem: string;
-            status: string;
-            tipo_cliente: string;
-            area: string;
-            descricao: string;
-            data_hora: string;
-        }
-    }>({
-        ativo: false,
-        etapa: 'tipo_cliente',
-        dados: {
-            origem: 'App Mobile',
-            status: 'Aberto',
-            tipo_cliente: '',
-            area: '',
-            descricao: '',
-            data_hora: ''
-        }
-    });
 
     useEffect(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -56,68 +34,54 @@ export const ChatScreen = () => {
         setMessages(prev => [...prev, { id: Math.random().toString(), text, type }]);
     };
 
-    // LOGICA DO ATENDIMENTO
-    const processarResposta = (msg: string) => {
-        if (msg.toLowerCase() === 'abrir ticket' && !fluxo.ativo) {
-            setFluxo({
-                ...fluxo,
-                ativo: true,
-                etapa: 'tipo_cliente',
-                dados: { ...fluxo.dados, data_hora: new Date().toLocaleString('pt-BR') }
-            });
-            addMessage("Com certeza! Vamos abrir um ticket. Primeiro, qual o **Tipo de Cliente**? (Ex: Varejo, Atacado, Interno)", "bot");
-            return;
-        }
-
-        if (fluxo.ativo) {
-            const novosDados = { ...fluxo.dados };
-
-            switch (fluxo.etapa) {
-                case 'tipo_cliente':
-                    novosDados.tipo_cliente = msg;
-                    setFluxo({ ...fluxo, etapa: 'area', dados: novosDados });
-                    addMessage("Entendido. Qual a **Área ou Departamento** responsável?", "bot");
-                    break;
-
-                case 'area':
-                    novosDados.area = msg;
-                    setFluxo({ ...fluxo, etapa: 'descricao', dados: novosDados });
-                    addMessage("Perfeito. Agora, por favor, me dê uma **Descrição curta** do que está acontecendo.", "bot");
-                    break;
-
-                case 'descricao':
-                    novosDados.descricao = msg;
-                    setFluxo({ ...fluxo, ativo: false, etapa: 'finalizado', dados: novosDados });
-
-                    // RESUMO DO TICKET
-                    const resumo = `✅ **Ticket Criado!**\n\n` +
-                        `📍 Origem: ${novosDados.origem}\n` +
-                        `📊 Status: ${novosDados.status}\n` +
-                        `👤 Cliente: ${novosDados.tipo_cliente}\n` +
-                        `🏢 Área: ${novosDados.area}\n` +
-                        `📝 Descrição: ${novosDados.descricao}\n` +
-                        `📅 Data: ${novosDados.data_hora}`;
-
-                    addMessage(resumo, "bot");
-
-                    // AQUI VOCÊ PODE DAR UM CONSOLE.LOG PARA VER O OBJETO PRONTO
-                    console.log("DADOS PARA O BANCO:", novosDados);
-                    break;
-            }
-        } else {
-            addMessage("Entendi! Para abrir um chamado, clique no botão acima ou digite 'Abrir ticket'.", "bot");
-        }
-    };
-
-    const handleSend = (override?: string) => {
+    // LÓGICA DE ATENDIMENTO COM IA (GEMINI)
+    const handleSend = async (override?: string) => {
         const texto = override || inputText;
         if (!texto.trim()) return;
 
+        // Se o utilizador clicou no botão "Ver meus tickets", navega para o ecrã em vez de falar com a IA
+        if (texto === 'Ver meus tickets') {
+            navigation.navigate('MeusTickets' as never);
+            return;
+        }
+
+        // 1. Adiciona a mensagem do utilizador ao ecrã
         addMessage(texto, 'user');
         setInputText('');
+        setIsLoading(true);
 
-        // Simula tempo de resposta
-        setTimeout(() => processarResposta(texto), 600);
+        try {
+            // 2. Faz o pedido ao nosso servidor Node.js
+            const response = await apiPost('/chat', {
+                message: texto,
+                userName: user?.name || 'Maicon'
+            });
+
+            // 3. Adiciona a resposta da IA ao ecrã
+            if (response && response.response) {
+                addMessage(response.response, 'bot');
+            } else {
+                addMessage("Desculpe, não consegui compreender a resposta do servidor.", 'bot');
+            }
+
+        } catch (error: any) {
+            console.error("Erro no Chat:", error);
+
+            // Lógica para extrair a mensagem de erro real e evitar o [object Object]
+            let textoErro = 'Falha na comunicação com o servidor. Verifique se o seu PC e o telemóvel estão na mesma rede Wi-Fi e se o IP está correto no ficheiro api.ts.';
+
+            if (typeof error === 'string') {
+                textoErro = error;
+            } else if (error && error.message) {
+                textoErro = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+            } else if (error && error.code === 'NETWORK_ERROR') {
+                textoErro = 'Sem conexão ao servidor local. Verifique o seu IP.';
+            }
+
+            addMessage(`❌ Erro: ${textoErro}`, 'bot');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -149,7 +113,7 @@ export const ChatScreen = () => {
                     <Text style={styles.sectionLabel}>OPÇÕES RÁPIDAS</Text>
 
                     <View style={styles.grid}>
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#1E1E1E' }]} onPress={() => handleSend('Abrir ticket')}>
+                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#1E1E1E' }]} onPress={() => handleSend('Gostaria de abrir um ticket para suporte.')}>
                             <Ionicons name="ticket-outline" size={24} color="#FFF" />
                             <Text style={styles.btnText}>Abrir ticket</Text>
                         </TouchableOpacity>
@@ -159,12 +123,12 @@ export const ChatScreen = () => {
                             <Text style={styles.btnText}>Ver meus tickets</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#7E3AF2' }]} onPress={() => handleSend('Problema no pedido')}>
+                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#7E3AF2' }]} onPress={() => handleSend('Tenho um problema no meu pedido.')}>
                             <Ionicons name="cube-outline" size={24} color="#FFF" />
                             <Text style={styles.btnText}>Problema no pedido</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#057A55' }]} onPress={() => handleSend('Falar com consultor')}>
+                        <TouchableOpacity style={[styles.btn, { backgroundColor: '#057A55' }]} onPress={() => handleSend('Gostaria de falar com um consultor.')}>
                             <Ionicons name="person-outline" size={24} color="#FFF" />
                             <Text style={styles.btnText}>Falar com consultor</Text>
                         </TouchableOpacity>
@@ -179,6 +143,15 @@ export const ChatScreen = () => {
                             </View>
                         </View>
                     ))}
+
+                    {/* Indicador de carregamento enquanto a IA pensa */}
+                    {isLoading && (
+                        <View style={styles.botMsgWrapper}>
+                            <View style={[styles.botMsg, { padding: 10 }]}>
+                                <ActivityIndicator size="small" color="#E01E26" />
+                            </View>
+                        </View>
+                    )}
                 </ScrollView>
 
                 <View style={styles.inputArea}>
@@ -188,9 +161,10 @@ export const ChatScreen = () => {
                             style={styles.input}
                             value={inputText}
                             onChangeText={setInputText}
+                            editable={!isLoading}
                         />
-                        <TouchableOpacity onPress={() => handleSend()}>
-                            <Ionicons name="send" size={24} color="#E01E26" />
+                        <TouchableOpacity onPress={() => handleSend()} disabled={isLoading}>
+                            <Ionicons name="send" size={24} color={isLoading ? "#CCC" : "#E01E26"} />
                         </TouchableOpacity>
                     </View>
                 </View>

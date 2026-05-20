@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// CORREÇÃO AQUI: Adicionado o "React" na importação
 import { createContext, ReactNode, useContext, useState } from 'react';
 
 // Define a estrutura do usuário
@@ -34,8 +35,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    setUser(null);
-    await AsyncStorage.clear();
+    try {
+      setUser(null);
+      // Removido o .clear() perigoso e alterado para remover apenas os dados do usuário
+      await AsyncStorage.removeItem('@Kozzy:token');
+      await AsyncStorage.removeItem('@Kozzy:user');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
   };
 
   return (
