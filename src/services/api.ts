@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storage';
 
 // Configure seu IP aqui — apenas em um lugar
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.4:3000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.7:3000';
 
 export interface ApiError {
   message: string;
@@ -52,7 +52,7 @@ export const api = async <T = any>(
 
     if (!response.ok) {
       throw {
-        message: data.message || 'Erro na requisição',
+        message: data.message || data.error || `Erro ${response.status}`,
         code: response.status,
         details: data,
       } as ApiError;

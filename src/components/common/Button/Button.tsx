@@ -85,13 +85,11 @@ export const Button: React.FC<ButtonProps> = ({
   const getButtonStyle = (): ViewStyle[] => {
     const baseStyles: ViewStyle[] = [
       styles.button,
-      styles[`button_${size}`],
-      fullWidth && styles.fullWidth,
+      styles[`button_${size}` as 'button_small' | 'button_medium' | 'button_large'],
     ];
 
-    if (isDisabled) {
-      baseStyles.push(styles.disabled);
-    }
+    if (fullWidth) baseStyles.push(styles.fullWidth);
+    if (isDisabled) baseStyles.push(styles.disabled);
 
     return baseStyles;
   };

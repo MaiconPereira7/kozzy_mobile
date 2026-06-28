@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ipconfig)",
+      "PowerShell(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^\\(127|169\\)' } | Select-Object IPAddress, InterfaceAlias)",
+      "PowerShell(New-NetFirewallRule -DisplayName \"Kozzy Server Dev\" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

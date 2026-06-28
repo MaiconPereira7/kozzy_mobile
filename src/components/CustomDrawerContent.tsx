@@ -1,10 +1,11 @@
-// src/components/CustomDrawerContent.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-navigation/drawer';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
-import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '../theme';
+import { BORDER_RADIUS, SPACING, TYPOGRAPHY } from '../theme';
+import type { Colors } from '../theme/colors';
 import { getInitials } from '../utils/formatters';
 
 type MenuItem = { title: string; icon: any; screen: string; badge?: number };
@@ -22,18 +23,18 @@ const ACCOUNT_MENU: MenuItem[] = [
 
 export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
   const { user, logout } = useUser();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentRoute = props.state.routes[props.state.index]?.name;
   const initials = getInitials(user?.name || 'U');
 
   const navigate = (screen: string) => {
+    if (['Central', 'Notificacoes', 'MeusTickets', 'AbrirTicket'].includes(screen)) {
+      props.navigation.navigate(screen);
+    } else {
+      props.navigation.getParent()?.navigate(screen);
+    }
     props.navigation.closeDrawer();
-    setTimeout(() => {
-      if (['Central', 'Notificacoes', 'MeusTickets', 'AbrirTicket'].includes(screen)) {
-        props.navigation.navigate(screen);
-      } else {
-        props.navigation.getParent()?.navigate(screen);
-      }
-    }, 150);
   };
 
   const renderItem = (item: MenuItem) => {
@@ -46,7 +47,7 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
         activeOpacity={0.7}
       >
         <View style={[styles.iconBox, isActive && styles.iconBoxActive]}>
-          <Ionicons name={item.icon} size={20} color={isActive ? COLORS.primary : COLORS.text.light} />
+          <Ionicons name={item.icon} size={20} color={isActive ? colors.primary : colors.text.light} />
         </View>
         <Text style={[styles.menuText, isActive && styles.menuTextActive]}>{item.title}</Text>
         {item.badge ? (
@@ -85,7 +86,7 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Ionicons name="power-outline" size={18} color={COLORS.primary} />
+          <Ionicons name="power-outline" size={18} color={colors.primary} />
           <Text style={styles.logoutText}>Sair da conta</Text>
         </TouchableOpacity>
       </View>
@@ -93,30 +94,30 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
+const makeStyles = (c: Colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.white },
   profileSection: { paddingHorizontal: SPACING.lg, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + SPACING.base : 56, paddingBottom: SPACING.lg, flexDirection: 'row', alignItems: 'center' },
-  avatarCircle: { width: 48, height: 48, borderRadius: BORDER_RADIUS.circle, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
-  avatarText: { color: COLORS.white, fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold },
+  avatarCircle: { width: 48, height: 48, borderRadius: BORDER_RADIUS.circle, backgroundColor: c.primary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+  avatarText: { color: c.text.white, fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold },
   profileInfo: { flex: 1 },
-  userName: { fontSize: TYPOGRAPHY.sizes.base, fontWeight: TYPOGRAPHY.weights.bold, color: COLORS.text.primary },
-  userEmail: { fontSize: TYPOGRAPHY.sizes.xs, color: COLORS.text.light, marginTop: 2 },
-  roleBadge: { backgroundColor: COLORS.status.openBg, borderRadius: BORDER_RADIUS.circle, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
-  roleText: { color: COLORS.primary, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
-  divider: { height: 1, backgroundColor: COLORS.border.light, marginHorizontal: SPACING.lg },
-  divider2: { height: 1, backgroundColor: COLORS.border.light, marginVertical: SPACING.md },
+  userName: { fontSize: TYPOGRAPHY.sizes.base, fontWeight: TYPOGRAPHY.weights.bold, color: c.text.primary },
+  userEmail: { fontSize: TYPOGRAPHY.sizes.xs, color: c.text.light, marginTop: 2 },
+  roleBadge: { backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.circle, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
+  roleText: { color: c.primary, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
+  divider: { height: 1, backgroundColor: c.border.light, marginHorizontal: SPACING.lg },
+  divider2: { height: 1, backgroundColor: c.border.light, marginVertical: SPACING.md },
   scroll: { flex: 1 },
-  sectionLabel: { fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.extrabold, color: COLORS.border.dark, letterSpacing: 1.5, marginLeft: SPACING.lg, marginTop: SPACING.base, marginBottom: SPACING.sm },
+  sectionLabel: { fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.extrabold, color: c.border.dark, letterSpacing: 1.5, marginLeft: SPACING.lg, marginTop: SPACING.base, marginBottom: SPACING.sm },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, paddingHorizontal: SPACING.base, marginHorizontal: SPACING.sm, borderRadius: BORDER_RADIUS.xl, marginBottom: 2 },
-  menuItemActive: { backgroundColor: COLORS.status.openBg },
-  iconBox: { width: 36, height: 36, borderRadius: BORDER_RADIUS.lg, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.backgroundLight, marginRight: SPACING.md },
-  iconBoxActive: { backgroundColor: COLORS.priority.highBg },
-  menuText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, color: COLORS.text.secondary, fontWeight: TYPOGRAPHY.weights.medium },
-  menuTextActive: { color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold },
-  badgeWrap: { backgroundColor: COLORS.primary, borderRadius: BORDER_RADIUS.circle, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xs },
-  badgeText: { color: COLORS.white, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
-  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.primary },
-  footer: { padding: SPACING.lg, borderTopWidth: 1, borderTopColor: COLORS.border.light, paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.lg },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.status.openBg, borderRadius: BORDER_RADIUS.xl, paddingVertical: SPACING.md, gap: SPACING.sm },
-  logoutText: { color: COLORS.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md },
+  menuItemActive: { backgroundColor: c.status.openBg },
+  iconBox: { width: 36, height: 36, borderRadius: BORDER_RADIUS.lg, justifyContent: 'center', alignItems: 'center', backgroundColor: c.backgroundLight, marginRight: SPACING.md },
+  iconBoxActive: { backgroundColor: c.priority.highBg },
+  menuText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, color: c.text.secondary, fontWeight: TYPOGRAPHY.weights.medium },
+  menuTextActive: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold },
+  badgeWrap: { backgroundColor: c.primary, borderRadius: BORDER_RADIUS.circle, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xs },
+  badgeText: { color: c.text.white, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.primary },
+  footer: { padding: SPACING.lg, borderTopWidth: 1, borderTopColor: c.border.light, paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.lg },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.xl, paddingVertical: SPACING.md, gap: SPACING.sm },
+  logoutText: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md },
 });

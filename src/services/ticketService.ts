@@ -16,14 +16,14 @@ export const ticketService = {
   },
 
   createTicket: async (data: TicketCreate): Promise<Ticket> => {
-  const newTicket: Ticket = {
-    id: Date.now().toString(),
-    status: 'open',
-    protocol: String(Math.floor(1000 + Math.random() * 9000)),
-    date: new Date().toLocaleDateString('pt-BR'),
-    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    ...data,
-  };
-  return Promise.resolve(newTicket);
-    },
+    const newTicket: Ticket = {
+      id: Date.now().toString(),
+      status: 'open',
+      protocol: String(Math.floor(1000 + Math.random() * 9000)),
+      date: new Date().toLocaleDateString('pt-BR'),
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      ...data,
+    };
+    return Promise.resolve(newTicket);
+  },
 };
