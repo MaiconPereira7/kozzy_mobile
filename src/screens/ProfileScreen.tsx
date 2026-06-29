@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { RootNavigationProp } from '../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState, useEffect } from 'react';
 import { Alert, Image, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { UserContext } from '../contexts/UserContext';
@@ -10,6 +10,7 @@ import type { ThemeMode } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import { getInitials } from '../utils/formatters';
+import { getServerUrl, setServerUrl } from '../services/api';
 
 interface FieldRowProps {
   label: string; icon: string; value: string; editable: boolean;
@@ -59,6 +60,9 @@ export default function ProfileScreen() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [tempUser, setTempUser] = useState({ ...(user ?? {}) });
+  const [serverUrl, setServerUrlState] = useState('');
+
+  useEffect(() => { setServerUrlState(getServerUrl()); }, []);
 
   const handleSave = () => {
     if (!tempUser.name || !tempUser.email) {
@@ -155,6 +159,31 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SERVIDOR</Text>
+          <Text style={styles.serverLabel}>URL do servidor (IP:porta)</Text>
+          <View style={styles.serverRow}>
+            <TextInput
+              style={styles.serverInput}
+              value={serverUrl}
+              onChangeText={setServerUrlState}
+              placeholder="http://192.168.x.x:3000"
+              placeholderTextColor={colors.input.placeholder}
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+            <TouchableOpacity
+              style={styles.serverSaveBtn}
+              onPress={async () => {
+                await setServerUrl(serverUrl.trim());
+                Alert.alert('Salvo', 'URL do servidor atualizada. Reinicie o app se necessário.');
+              }}
+            >
+              <Text style={styles.serverSaveBtnText}>Salvar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {isEditing && (
           <TouchableOpacity style={styles.cancelBtn} onPress={() => { setTempUser({ ...(user ?? {}) }); setIsEditing(false); }}>
             <Text style={styles.cancelText}>Cancelar edição</Text>
@@ -204,6 +233,11 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   changePassText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, color: c.text.secondary },
   cancelBtn: { backgroundColor: c.white, borderWidth: 1.5, borderColor: c.primary, borderRadius: BORDER_RADIUS.xl, height: 48, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.md },
   cancelText: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md },
+  serverLabel: { fontSize: TYPOGRAPHY.sizes.xs, color: c.text.secondary, marginBottom: SPACING.sm },
+  serverRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  serverInput: { flex: 1, backgroundColor: c.backgroundLight, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: c.border.light, paddingHorizontal: SPACING.md, height: 44, fontSize: TYPOGRAPHY.sizes.sm, color: c.text.primary },
+  serverSaveBtn: { backgroundColor: c.primary, borderRadius: BORDER_RADIUS.lg, paddingHorizontal: SPACING.md, height: 44, justifyContent: 'center', alignItems: 'center' },
+  serverSaveBtnText: { color: c.text.white, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.sm },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.xl, height: 48, gap: SPACING.sm },
   logoutText: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md },
 });

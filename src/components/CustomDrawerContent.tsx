@@ -1,21 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-navigation/drawer';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
+import { ticketService } from '../services/ticketService';
 import { BORDER_RADIUS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import { getInitials } from '../utils/formatters';
 
 type MenuItem = { title: string; icon: any; screen: string; badge?: number };
-
-const MAIN_MENU: MenuItem[] = [
-  { title: 'Central Kozzy', icon: 'chatbubble-ellipses-outline', screen: 'Central' },
-  { title: 'Meus Tickets', icon: 'ticket-outline', screen: 'MeusTickets', badge: 2 },
-  { title: 'Abrir Ticket', icon: 'add-circle-outline', screen: 'AbrirTicket' },
-  { title: 'Notificações', icon: 'notifications-outline', screen: 'Notificacoes', badge: 1 },
-];
 
 const ACCOUNT_MENU: MenuItem[] = [
   { title: 'Meu Perfil', icon: 'person-outline', screen: 'Profile' },
@@ -27,6 +21,26 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentRoute = props.state.routes[props.state.index]?.name;
   const initials = getInitials(user?.name || 'U');
+  const isSupervisor = user?.role === 'supervisor' || user?.role === 'admin';
+
+  const [openCount, setOpenCount] = useState(0);
+
+  useEffect(() => {
+    const load = async () => {
+      const all = isSupervisor
+        ? await ticketService.getAllTickets()
+        : await ticketService.getMyTickets(user?.name);
+      setOpenCount(all.filter(t => t.status === 'open').length);
+    };
+    load();
+  }, [isSupervisor, user?.name]);
+
+  const MAIN_MENU: MenuItem[] = [
+    { title: isSupervisor ? 'Painel' : 'Central Kozzy', icon: isSupervisor ? 'grid-outline' : 'chatbubble-ellipses-outline', screen: 'Central' },
+    { title: isSupervisor ? 'Todos os Chamados' : 'Meus Tickets', icon: 'ticket-outline', screen: 'MeusTickets', badge: openCount > 0 ? openCount : undefined },
+    ...(isSupervisor ? [] : [{ title: 'Abrir Ticket', icon: 'add-circle-outline', screen: 'AbrirTicket' }] as MenuItem[]),
+    { title: 'Notificações', icon: 'notifications-outline', screen: 'Notificacoes' },
+  ];
 
   const navigate = (screen: string) => {
     if (['Central', 'Notificacoes', 'MeusTickets', 'AbrirTicket'].includes(screen)) {
@@ -69,9 +83,11 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
           <Text style={styles.userName} numberOfLines={1}>{user?.name || 'Usuário'}</Text>
           <Text style={styles.userEmail} numberOfLines={1}>{user?.email || ''}</Text>
         </View>
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{user?.role === 'admin' ? 'Admin' : 'Cliente'}</Text>
-        </View>
+        {user?.role !== 'supervisor' && user?.role !== 'admin' && (
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleText}>Cliente</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -97,8 +113,8 @@ export const CustomDrawerContent = (props: DrawerContentComponentProps) => {
 const makeStyles = (c: Colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.white },
   profileSection: { paddingHorizontal: SPACING.lg, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + SPACING.base : 56, paddingBottom: SPACING.lg, flexDirection: 'row', alignItems: 'center' },
-  avatarCircle: { width: 48, height: 48, borderRadius: BORDER_RADIUS.circle, backgroundColor: c.primary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
-  avatarText: { color: c.text.white, fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold },
+  avatarCircle: { width: 48, height: 48, borderRadius: BORDER_RADIUS.circle, backgroundColor: '#e60023', justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md, shadowColor: '#e60023', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+  avatarText: { color: '#FFF', fontSize: TYPOGRAPHY.sizes.lg, fontWeight: TYPOGRAPHY.weights.bold },
   profileInfo: { flex: 1 },
   userName: { fontSize: TYPOGRAPHY.sizes.base, fontWeight: TYPOGRAPHY.weights.bold, color: c.text.primary },
   userEmail: { fontSize: TYPOGRAPHY.sizes.xs, color: c.text.light, marginTop: 2 },
@@ -115,7 +131,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   menuText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, color: c.text.secondary, fontWeight: TYPOGRAPHY.weights.medium },
   menuTextActive: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold },
   badgeWrap: { backgroundColor: c.primary, borderRadius: BORDER_RADIUS.circle, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xs },
-  badgeText: { color: c.text.white, fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
+  badgeText: { color: '#FFF', fontSize: TYPOGRAPHY.sizes.xs, fontWeight: TYPOGRAPHY.weights.bold },
   activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.primary },
   footer: { padding: SPACING.lg, borderTopWidth: 1, borderTopColor: c.border.light, paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.lg },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.xl, paddingVertical: SPACING.md, gap: SPACING.sm },

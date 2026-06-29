@@ -20,49 +20,70 @@ const client = new OpenAI({
   timeout: 12_000, // 12s por tentativa — garante que 3 modelos cabem nos 45s do app
 });
 
-const SYSTEM_PROMPT = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. Seu principal objetivo é ajudar clientes e abrir tickets de suporte quando necessário.
+const VALID_CATEGORIES = ['Entrega', 'Faturamento', 'Produto', 'Comercial', 'Suporte TI', 'Outro'];
 
-Quando o cliente mencionar qualquer problema (entrega atrasada, produto com defeito, dúvida em fatura, etc.), conduza uma conversa natural para coletar:
-1. Assunto — resumo curto do problema (máx 80 caracteres)
-2. Categoria — uma de: Entrega, Faturamento, Produto, Comercial, Suporte TI, Outro
-3. Descrição — detalhes do problema
+const SYSTEM_PROMPT = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. Responda SEMPRE em português brasileiro.
 
-Faça as perguntas de forma natural, uma ou duas por vez. NÃO pergunte sobre prioridade — isso é definido internamente pela equipe.
-Quando tiver as 3 informações coletadas, responda EXATAMENTE assim (sem nada antes do marcador):
+FLUXO OBRIGATÓRIO para abrir um chamado:
+Passo 1 — Pergunte: "Qual é o assunto do problema?" (se o cliente não disse)
+Passo 2 — Pergunte: "Em qual categoria se encaixa? Entrega / Faturamento / Produto / Comercial / Suporte TI / Outro"
+Passo 3 — Pergunte: "Pode descrever o problema com mais detalhes?"
+Passo 4 — Somente depois de ter as 3 respostas, emita o KOZZY_TICKET.
 
-KOZZY_TICKET:{"subject":"...","category":"...","description":"..."}
-Sua mensagem amigável confirmando que o ticket será registrado e a equipe entrará em contato.
+REGRAS RÍGIDAS:
+- Se o cliente disse APENAS "quero abrir chamado" ou similar, faça o Passo 1. NÃO crie ticket ainda.
+- Só emita KOZZY_TICKET quando tiver ASSUNTO real + CATEGORIA válida + DESCRIÇÃO com detalhes.
+- ASSUNTO deve ter no mínimo 5 palavras descrevendo o problema.
+- CATEGORIA deve ser exatamente uma de: Entrega, Faturamento, Produto, Comercial, Suporte TI, Outro.
+- DESCRIÇÃO deve ter no mínimo 15 palavras com detalhes do problema.
+- Nunca invente informações; use só o que o cliente disse.
+- Para perguntas gerais sem problema, responda normalmente sem criar ticket.
 
-Regras importantes:
-- Só emita KOZZY_TICKET quando tiver as 3 informações completas
-- Nunca mencione prioridade ao cliente
-- Se o cliente não quiser abrir ticket, apenas ajude normalmente
-- Responda sempre em português brasileiro
-- Seja breve e amigável`;
+FORMATO do ticket (use {} nunca []):
+KOZZY_TICKET:{"subject":"Produto com defeito na embalagem","category":"Produto","description":"Recebi o lote 882 com embalagens amassadas e o produto vazando."}
+Mensagem amigável confirmando o registro.`;
+
+// Modelos de chat preferidos — NÃO incluir code/safety/reasoning especializados
+// cohere/north-mini-code removido — modelo de código que não segue prompts de chat
 
 // Modelos de chat preferidos — NÃO incluir code/safety/reasoning especializados
 const PREFERRED = [
-  'cohere/north-mini-code:free',
-  'qwen/qwen3-8b:free',
   'mistralai/mistral-7b-instruct:free',
-  'google/gemma-3-27b-it:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'deepseek/deepseek-chat:free',
   'meta-llama/llama-3.1-8b-instruct:free',
+  'meta-llama/llama-3.2-11b-vision-instruct:free',
+  'nousresearch/hermes-3-llama-3.1-8b:free',
+  'mistralai/mistral-nemo:free',
+  'qwen/qwen3-8b:free',
+  'google/gemma-3-27b-it:free',
+  'deepseek/deepseek-chat:free',
+  'google/gemma-3-12b-it:free',
+  'microsoft/phi-3-mini-128k-instruct:free',
 ];
 
 // Padrões de modelos especializados que NÃO servem para chat
-const UNSUITABLE = ['content-safety', 'content-filter', 'code:', 'north-mini-code', 'reasoning', 'poolside', 'nemotron'];
+const UNSUITABLE = [
+  'content-safety', 'content-filter', 'code:', 'north-mini-code',
+  'reasoning', 'poolside', 'nemotron', 'thinking',  // thinking models quebram prompts de chat
+  '1.2b', '0.5b', '1b:', 'a3b',                    // modelos muito pequenos (<2B params)
+];
 const isChatModel = (id) => !UNSUITABLE.some(p => id.includes(p));
 
-// Blacklist: modelos que deram 429 ficam bloqueados por 5 minutos
+// Blacklist: modelos que deram 429 ficam bloqueados por 10 minutos
 const blacklist = new Map();
-const BLACKLIST_TTL = 5 * 60 * 1000;
+const BLACKLIST_TTL = 10 * 60 * 1000;
 const isBlacklisted = (model) => {
   const ts = blacklist.get(model);
   if (!ts) return false;
   if (Date.now() - ts > BLACKLIST_TTL) { blacklist.delete(model); return false; }
   return true;
+};
+// Retorna o modelo bloqueado há mais tempo (maior chance de ter sido liberado)
+const leastRecentlyBlocked = () => {
+  let oldest = null; let oldestTs = Infinity;
+  for (const [model, ts] of blacklist.entries()) {
+    if (ts < oldestTs) { oldest = model; oldestTs = ts; }
+  }
+  return oldest;
 };
 
 let models = [];
@@ -95,28 +116,33 @@ async function callAI(messages) {
   if (models.length === 0) await loadModels();
 
   for (let attempt = 0; attempt < models.length; attempt++) {
-    const model = models[modelIdx];
+    let model = models[modelIdx];
 
     if (isBlacklisted(model)) {
       modelIdx = (modelIdx + 1) % models.length;
-      continue;
+      // Todos bloqueados: usa o menos recente como última tentativa
+      if (attempt === models.length - 1) {
+        model = leastRecentlyBlocked() ?? model;
+        console.warn(`⚡ Todos bloqueados — tentando ${model} (menos recente)`);
+      } else {
+        continue;
+      }
     }
 
     try {
       const completion = await client.chat.completions.create({ model, messages });
       const text = completion.choices[0]?.message?.content;
       if (!text) throw new Error('Resposta vazia');
-      // Sucesso: mantém modelIdx no modelo que funcionou
       console.log(`✅ Resposta ok (${model})`);
       return { text, model };
     } catch (err) {
       if (err.status === 429) {
         blacklist.set(model, Date.now());
-        console.warn(`⛔ ${model} → 429, bloqueado por 5 min`);
+        console.warn(`⛔ ${model} → 429, bloqueado por 10 min`);
       } else {
         console.warn(`⚠️ ${model} falhou (${err.status ?? '?'}) — próximo...`);
       }
-      modelIdx = (modelIdx + 1) % models.length; // avança só na falha
+      modelIdx = (modelIdx + 1) % models.length;
     }
   }
   throw new Error('Todos os modelos disponíveis falharam. Tente em alguns minutos.');
@@ -138,16 +164,63 @@ app.post('/chat', async (req, res) => {
 
     const { text } = await callAI(messages);
 
-    // Detecta se a IA quer criar um ticket
-    const ticketMatch = text.match(/KOZZY_TICKET:(\{[^}]+\})/s);
-    if (ticketMatch) {
-      try {
-        const ticketData = JSON.parse(ticketMatch[1]);
-        const cleanText = text.replace(/KOZZY_TICKET:\{[^}]+\}\s*/s, '').trim();
-        console.log(`🎫 Ticket detectado:`, ticketData);
-        return res.json({ response: cleanText, createTicket: ticketData });
-      } catch {
-        // JSON inválido — trata como resposta normal
+    // Detecta se a IA quer criar um ticket usando casamento de chaves balanceado
+    const markerIdx = text.indexOf('KOZZY_TICKET:');
+    if (markerIdx !== -1) {
+      const jsonStart = text.indexOf('{', markerIdx);
+      if (jsonStart !== -1) {
+        // Percorre o texto contando { e } para encontrar o bloco JSON completo,
+        // ignorando chaves dentro de strings (entre aspas, respeitando \")
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let jsonEnd = -1;
+        for (let i = jsonStart; i < text.length; i++) {
+          const ch = text[i];
+          if (escape) { escape = false; continue; }
+          if (ch === '\\' && inString) { escape = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (ch === '{') depth++;
+          else if (ch === '}') { if (--depth === 0) { jsonEnd = i; break; } }
+        }
+        if (jsonEnd !== -1) {
+          try {
+            const jsonBlock = text.slice(jsonStart, jsonEnd + 1);
+            const ticketData = JSON.parse(jsonBlock);
+
+            // Valida que o ticket tem dados reais antes de aceitar
+            const validTicket =
+              ticketData.subject?.trim().length >= 5 &&
+              ticketData.description?.trim().split(/\s+/).length >= 5 &&
+              VALID_CATEGORIES.includes(ticketData.category);
+
+            if (validTicket) {
+              const cleanText = text.slice(0, markerIdx) + text.slice(jsonEnd + 1);
+              console.log(`🎫 Ticket criado:`, ticketData);
+              return res.json({ response: cleanText.trim(), createTicket: ticketData });
+            }
+            console.warn('🚫 Ticket rejeitado — dados insuficientes:', ticketData);
+          } catch {
+            // JSON inválido — tenta fallback abaixo
+          }
+        }
+
+        // Fallback: alguns modelos usam ] em vez de } para fechar o objeto JSON
+        const afterOpen = text.slice(jsonStart);
+        const bracketIdx = afterOpen.search(/\](?=\s*\n|$)/);
+        if (bracketIdx !== -1) {
+          try {
+            const candidate = afterOpen.slice(0, bracketIdx) + '}';
+            const ticketData = JSON.parse(candidate);
+            const endPos = jsonStart + bracketIdx;
+            const cleanText = text.slice(0, markerIdx) + text.slice(endPos + 1);
+            console.log(`🎫 Ticket detectado (fallback ]):`, ticketData);
+            return res.json({ response: cleanText.trim(), createTicket: ticketData });
+          } catch {
+            // Ainda inválido — trata como resposta normal
+          }
+        }
       }
     }
 

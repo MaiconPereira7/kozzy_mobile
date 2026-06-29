@@ -18,6 +18,19 @@ export type TicketStatus = 'open' | 'inProgress' | 'closed';
 export type TicketPriority = 'high' | 'medium' | 'low';
 export type ClientType = 'retail' | 'wholesale' | 'foodService';
 
+export interface TicketResponse {
+  id: string;
+  text: string;
+  author: string;
+  authorRole: 'supervisor' | 'admin' | 'user';
+  createdAt: string;
+}
+
+export interface TicketRating {
+  stars: number; // 1–5
+  comment?: string;
+}
+
 export interface Ticket {
   id: string;
   name: string;
@@ -30,6 +43,8 @@ export interface Ticket {
   date: string;
   time: string;
   description: string;
+  responses?: TicketResponse[];
+  rating?: TicketRating;
   createdAt?: string;
   updatedAt?: string;
   assignedTo?: string;

@@ -27,6 +27,14 @@ export const AbrirTicketScreen = () => {
             Alert.alert('Campos obrigatórios', 'Preencha assunto, categoria e descrição.');
             return;
         }
+        if (assunto.trim().length < 10) {
+            Alert.alert('Assunto muito curto', 'Descreva o assunto com pelo menos 10 caracteres.');
+            return;
+        }
+        if (descricao.trim().length < 20) {
+            Alert.alert('Descrição muito curta', 'Descreva o problema com pelo menos 20 caracteres para nos ajudar a atender melhor.');
+            return;
+        }
         setLoading(true);
         try {
             const ticket = await ticketService.createTicket({
@@ -104,7 +112,9 @@ export const AbrirTicketScreen = () => {
                         textAlignVertical="top"
                         maxLength={500}
                     />
-                    <Text style={styles.charCount}>{descricao.length}/500</Text>
+                    <Text style={[styles.charCount, descricao.length < 20 && descricao.length > 0 && { color: colors.error }]}>
+                        {descricao.length < 20 && descricao.length > 0 ? `mín. 20 chars (${descricao.length})` : `${descricao.length}/500`}
+                    </Text>
 
                     <View style={styles.solicitanteCard}>
                         <Ionicons name="person-circle-outline" size={20} color={colors.primary} />

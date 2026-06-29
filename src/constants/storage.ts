@@ -5,4 +5,5 @@ export const STORAGE_KEYS = {
   USER:         '@Kozzy:user',
   THEME:        '@Kozzy:theme',
   CHAT_HISTORY: '@Kozzy:chatHistory',
+  SERVER_URL:   '@Kozzy:serverUrl',
 } as const;

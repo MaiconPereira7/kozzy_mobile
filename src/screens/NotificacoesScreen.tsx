@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Platform, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { notificationService } from '../services/notificationService';
+import { useUser } from '../contexts/UserContext';
 import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import type { Notification } from '../types';
@@ -12,17 +13,18 @@ import type { AppDrawerNavigationProp } from '../types/navigation';
 export const NotificacoesScreen = () => {
   const navigation = useNavigation<AppDrawerNavigationProp>();
   const { colors, isDark } = useTheme();
+  const { user } = useUser();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadNotifs = async () => {
-    const data = await notificationService.getAll();
+    const data = await notificationService.getAll(user?.role);
     setNotifs(data);
   };
 
-  useEffect(() => { loadNotifs(); }, []);
+  useEffect(() => { loadNotifs(); }, [user?.role]);
 
   const onRefresh = async () => {
     setRefreshing(true);

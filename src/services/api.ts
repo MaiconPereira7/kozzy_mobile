@@ -1,8 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.5:3000';
+const DEFAULT_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.5:3000';
 const TIMEOUT_MS = 45_000;
+
+let _baseUrl = DEFAULT_URL;
+
+/** Lê a URL salva pelo usuário e usa como base. Chamar no App.tsx. */
+export const initServerUrl = async () => {
+  const stored = await AsyncStorage.getItem(STORAGE_KEYS.SERVER_URL);
+  if (stored) _baseUrl = stored;
+};
+
+/** Salva nova URL e passa a usá-la imediatamente. */
+export const setServerUrl = async (url: string) => {
+  _baseUrl = url.replace(/\/+$/, ''); // remove trailing slash
+  await AsyncStorage.setItem(STORAGE_KEYS.SERVER_URL, _baseUrl);
+};
+
+export const getServerUrl = () => _baseUrl;
 
 export interface ApiError {
   message: string;
@@ -22,8 +38,7 @@ export const api = async <T = any>(
   body?: any,
   customHeaders?: Record<string, string>
 ): Promise<T> => {
-  const url = `${BASE_URL}${endpoint}`;
-
+  const url = `${_baseUrl}${endpoint}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...customHeaders,
@@ -46,11 +61,8 @@ export const api = async <T = any>(
     clearTimeout(timer);
 
     let data: any;
-    try {
-      data = await response.json();
-    } catch {
-      data = { message: 'Resposta inválida do servidor' };
-    }
+    try { data = await response.json(); }
+    catch { data = { message: 'Resposta inválida do servidor' }; }
 
     if (!response.ok) {
       throw {
@@ -59,21 +71,14 @@ export const api = async <T = any>(
         details: data,
       } as ApiError;
     }
-
     return data;
   } catch (error: any) {
     clearTimeout(timer);
     if (error.name === 'AbortError') {
-      throw {
-        message: 'Tempo de resposta excedido (45s). Verifique a conexão.',
-        code: 'TIMEOUT',
-      } as ApiError;
+      throw { message: 'Tempo de resposta excedido (45s). Verifique a conexão.', code: 'TIMEOUT' } as ApiError;
     }
     if (error.message === 'Network request failed' || error.name === 'TypeError') {
-      throw {
-        message: 'Sem conexão com o servidor. Verifique se o server.js está rodando no PC.',
-        code: 'NETWORK_ERROR',
-      } as ApiError;
+      throw { message: 'Sem conexão com o servidor. Verifique se o server.js está rodando.', code: 'NETWORK_ERROR' } as ApiError;
     }
     throw error;
   }
@@ -88,10 +93,10 @@ export const handleApiError = (error: ApiError): string => {
   const map: Record<string | number, string> = {
     NETWORK_ERROR: 'Sem conexão. Verifique o servidor Kozzy.',
     TIMEOUT:       'Tempo esgotado. Tente novamente.',
-    400: 'Dados inválidos. Verifique as informações.',
-    401: 'Acesso não autorizado. Faça login novamente.',
-    404: 'Serviço não encontrado no servidor.',
-    500: 'Erro interno do servidor. Tente mais tarde.',
+    400: 'Dados inválidos.',
+    401: 'Faça login novamente.',
+    404: 'Serviço não encontrado.',
+    500: 'Erro interno do servidor.',
   };
-  return map[error.code ?? ''] ?? error.message ?? 'Ocorreu um erro desconhecido.';
+  return map[error.code ?? ''] ?? error.message ?? 'Erro desconhecido.';
 };

@@ -15,6 +15,8 @@ import { BORDER_RADIUS } from '../theme';
 import type { Colors } from '../theme/colors';
 import { STORAGE_KEYS } from '../constants/storage';
 import type { AppDrawerNavigationProp, AppDrawerParamList } from '../types/navigation';
+import type { Ticket } from '../types';
+import { useServerStatus } from '../hooks/useServerStatus';
 
 type Message = {
     id: string;
@@ -46,16 +48,146 @@ const getNow = () => {
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 };
 
+// ─── Painel do Supervisor ────────────────────────────────────────────────────
+const SupervisorPanel = () => {
+    const { user } = useUser();
+    const { colors } = useTheme();
+    const panelStyles = useMemo(() => makePanelStyles(colors), [colors]);
+    const navigation = useNavigation<AppDrawerNavigationProp>();
+
+    const [tickets, setTickets] = useState<Ticket[]>([]);
+
+    useEffect(() => {
+        ticketService.getAllTickets().then(setTickets);
+    }, []);
+
+    const open       = tickets.filter(t => t.status === 'open').length;
+    const inProgress = tickets.filter(t => t.status === 'inProgress').length;
+    const closed     = tickets.filter(t => t.status === 'closed').length;
+    const highPriority = tickets.filter(t => t.priority === 'high' && t.status !== 'closed').length;
+    const recent     = tickets.slice(0, 4);
+
+    return (
+        <View style={panelStyles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#E01E26" />
+            <View style={panelStyles.header}>
+                <View style={panelStyles.headerLeft}>
+                    <View style={panelStyles.headerAvatar}>
+                        <Text style={panelStyles.headerAvatarText}>KZ</Text>
+                    </View>
+                    <View>
+                        <Text style={panelStyles.headerTitle}>Painel Kozzy</Text>
+                        <Text style={panelStyles.headerSub}>Olá, {user?.name?.split(' ')[0]}!</Text>
+                    </View>
+                </View>
+                <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="menu-outline" size={28} color="#FFF" />
+                </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={panelStyles.scroll} showsVerticalScrollIndicator={false}>
+                {/* Stats */}
+                <View style={panelStyles.statsRow}>
+                    {[
+                        { label: 'Abertos', value: open, color: colors.status.open, bg: colors.status.openBg },
+                        { label: 'Andamento', value: inProgress, color: colors.status.inProgress, bg: colors.status.inProgressBg },
+                        { label: 'Encerrados', value: closed, color: colors.status.closed, bg: colors.status.closedBg },
+                    ].map(s => (
+                        <View key={s.label} style={[panelStyles.statCard, { backgroundColor: s.bg }]}>
+                            <Text style={[panelStyles.statValue, { color: s.color }]}>{s.value}</Text>
+                            <Text style={[panelStyles.statLabel, { color: s.color }]}>{s.label}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {highPriority > 0 && (
+                    <View style={panelStyles.alertBanner}>
+                        <Ionicons name="alert-circle" size={18} color="#FFF" />
+                        <Text style={panelStyles.alertText}>{highPriority} chamado{highPriority > 1 ? 's' : ''} com alta prioridade pendente{highPriority > 1 ? 's' : ''}!</Text>
+                    </View>
+                )}
+
+                {/* Ações rápidas */}
+                <Text style={panelStyles.sectionLabel}>ACESSO RÁPIDO</Text>
+                <View style={panelStyles.actionsRow}>
+                    <TouchableOpacity style={[panelStyles.actionBtn, { backgroundColor: colors.status.openBg }]} onPress={() => navigation.navigate('MeusTickets')}>
+                        <Ionicons name="list-outline" size={22} color={colors.primary} />
+                        <Text style={[panelStyles.actionLabel, { color: colors.primary }]}>Todos os Chamados</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[panelStyles.actionBtn, { backgroundColor: colors.status.inProgressBg }]} onPress={() => navigation.navigate('Notificacoes')}>
+                        <Ionicons name="notifications-outline" size={22} color={colors.status.inProgress} />
+                        <Text style={[panelStyles.actionLabel, { color: colors.status.inProgress }]}>Notificações</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Últimos chamados */}
+                <Text style={panelStyles.sectionLabel}>ÚLTIMOS CHAMADOS</Text>
+                {recent.length === 0 ? (
+                    <View style={panelStyles.emptyBox}>
+                        <Text style={panelStyles.emptyText}>Nenhum chamado registrado ainda.</Text>
+                    </View>
+                ) : recent.map(t => {
+                    const statusColors: Record<string, string> = {
+                        open: colors.status.open,
+                        inProgress: colors.status.inProgress,
+                        closed: colors.status.closed,
+                    };
+                    const statusLabels: Record<string, string> = { open: 'Aberto', inProgress: 'Andamento', closed: 'Encerrado' };
+                    const sc = statusColors[t.status];
+                    return (
+                        <View key={t.id} style={panelStyles.ticketCard}>
+                            <View style={panelStyles.ticketTop}>
+                                <Text style={panelStyles.ticketSubject} numberOfLines={1}>{t.subject}</Text>
+                                <View style={[panelStyles.statusDot, { backgroundColor: sc + '22' }]}>
+                                    <Text style={[panelStyles.statusDotText, { color: sc }]}>{statusLabels[t.status]}</Text>
+                                </View>
+                            </View>
+                            <Text style={panelStyles.ticketMeta}>{t.name} · {t.category} · #{t.protocol}</Text>
+                        </View>
+                    );
+                })}
+            </ScrollView>
+        </View>
+    );
+};
+
+// ─── Wrapper thin — decide qual tela renderizar sem violar Rules of Hooks ────
 export const ChatScreen = () => {
+    const { user } = useUser();
+    const isSupervisor = user?.role === 'supervisor' || user?.role === 'admin';
+    return isSupervisor ? <SupervisorPanel /> : <ClientChat />;
+};
+
+// ─── Chat do cliente ─────────────────────────────────────────────────────────
+const ClientChat = () => {
     const { user } = useUser();
     const { colors, isDark } = useTheme();
     const styles = useMemo(() => makeStyles(colors), [colors]);
     const navigation = useNavigation<AppDrawerNavigationProp>();
+    const { status: serverStatus } = useServerStatus(30_000);
 
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [errorToast, setErrorToast] = useState('');
+    const [rateLimitMsg, setRateLimitMsg] = useState('');
     const scrollViewRef = useRef<ScrollView>(null);
+    const msgTimestamps = useRef<number[]>([]);
+    const RATE_LIMIT = 5;
+    const RATE_WINDOW = 60_000;
+
+    const checkRateLimit = (): boolean => {
+        const now = Date.now();
+        msgTimestamps.current = msgTimestamps.current.filter(t => now - t < RATE_WINDOW);
+        if (msgTimestamps.current.length >= RATE_LIMIT) {
+            const oldest = msgTimestamps.current[0];
+            const wait = Math.ceil((RATE_WINDOW - (now - oldest)) / 1000);
+            setRateLimitMsg(`Muitas mensagens. Aguarde ${wait}s.`);
+            setTimeout(() => setRateLimitMsg(''), wait * 1000);
+            return false;
+        }
+        msgTimestamps.current.push(now);
+        return true;
+    };
     const firstName = user?.name?.split(' ')[0] || 'você';
 
     const welcomeMsg: Message = useMemo(() => ({
@@ -107,6 +239,7 @@ export const ChatScreen = () => {
     const handleSend = async (override?: string, retryId?: string) => {
         const texto = (override || inputText).trim();
         if (!texto || isLoading) return;
+        if (!retryId && !checkRateLimit()) return;
 
         let userMsgId: string;
 
@@ -176,6 +309,17 @@ export const ChatScreen = () => {
 
     const retryMessage = (msg: Message) => handleSend(msg.text, msg.id);
 
+    const getSuggestions = (): string[] => {
+        const lastBot = [...messages].reverse().find(m => m.type === 'bot' && !m.failed);
+        if (!lastBot || isLoading) return [];
+        const t = lastBot.text.toLowerCase();
+        if (['categoria', 'tipo de chamado', 'qual categoria', 'se encaixa', 'assunto se'].some(k => t.includes(k)))
+            return ['Entrega', 'Faturamento', 'Produto', 'Comercial', 'Suporte TI', 'Outro'];
+        // chips yes/no removidos — disparavam em contextos errados
+        return [];
+    };
+    const suggestions = getSuggestions();
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#E01E26" />
@@ -196,7 +340,8 @@ export const ChatScreen = () => {
                     </View>
                     <View style={styles.headerActions}>
                         <TouchableOpacity onPress={clearChat} style={styles.clearBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <Ionicons name="trash-outline" size={20} color="rgba(255,255,255,0.8)" />
+                            <Ionicons name="trash-outline" size={15} color="rgba(255,255,255,0.9)" />
+                            <Text style={styles.clearBtnText}>Limpar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
@@ -297,6 +442,28 @@ export const ChatScreen = () => {
                     <View style={{ height: 12 }} />
                 </ScrollView>
 
+                {suggestions.length > 0 && (
+                    <View style={styles.suggestionsRow}>
+                        {suggestions.map(s => (
+                            <TouchableOpacity key={s} style={styles.suggestionChip} onPress={() => handleSend(s)} activeOpacity={0.7}>
+                                <Text style={styles.suggestionText}>{s}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
+                {serverStatus === 'offline' && (
+                    <View style={[styles.errorToast, { backgroundColor: '#374151' }]}>
+                        <Ionicons name="cloud-offline-outline" size={15} color="#FFF" />
+                        <Text style={styles.errorToastText}>Servidor offline — verifique a conexão</Text>
+                    </View>
+                )}
+                {!!rateLimitMsg && (
+                    <View style={[styles.errorToast, { backgroundColor: '#F59E0B' }]}>
+                        <Ionicons name="time-outline" size={15} color="#FFF" />
+                        <Text style={styles.errorToastText}>{rateLimitMsg}</Text>
+                    </View>
+                )}
                 {!!errorToast && (
                     <View style={styles.errorToast}>
                         <Ionicons name="wifi-outline" size={15} color="#FFF" />
@@ -350,7 +517,6 @@ const makeStyles = (c: Colors) => StyleSheet.create({
     onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ADE80', marginRight: 5 },
     onlineText: { color: 'rgba(255,255,255,0.85)', fontSize: 12 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    clearBtn: { padding: 4 },
     menuBtn: { padding: 4 },
 
     scrollContent: { padding: 16, paddingTop: 24 },
@@ -395,6 +561,42 @@ const makeStyles = (c: Colors) => StyleSheet.create({
     input: { flex: 1, fontSize: 15, color: c.text.primary, maxHeight: 100, paddingTop: 6, paddingBottom: 6 },
     sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#E01E26', justifyContent: 'center', alignItems: 'center' },
     sendBtnDisabled: { backgroundColor: '#F0B0B3' },
+
+    clearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)' },
+    clearBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: '600' },
+
+    suggestionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: c.white, borderTopWidth: 1, borderTopColor: c.border.light },
+    suggestionChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, backgroundColor: c.backgroundLight, borderWidth: 1, borderColor: c.border.medium },
+    suggestionText: { fontSize: 13, color: c.text.primary, fontWeight: '500' },
+});
+
+const makePanelStyles = (c: Colors) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.backgroundLight },
+    header: { backgroundColor: '#E01E26', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 8 : 54, paddingBottom: 16, paddingHorizontal: 20, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    headerAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' },
+    headerAvatarText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+    headerSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+    scroll: { padding: 16, paddingBottom: 40 },
+    statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    statCard: { flex: 1, borderRadius: 14, padding: 14, alignItems: 'center' },
+    statValue: { fontSize: 28, fontWeight: '800' },
+    statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    alertBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E01E26', borderRadius: 12, padding: 12, marginBottom: 16 },
+    alertText: { color: '#FFF', fontSize: 13, fontWeight: '600', flex: 1 },
+    sectionLabel: { fontSize: 10, fontWeight: '800', color: c.text.light, letterSpacing: 1.5, marginBottom: 10, marginLeft: 2, marginTop: 4 },
+    actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14 },
+    actionLabel: { fontSize: 13, fontWeight: '600', flex: 1 },
+    ticketCard: { backgroundColor: c.white, borderRadius: 14, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: c.primary },
+    ticketTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    ticketSubject: { fontSize: 14, fontWeight: '700', color: c.text.primary, flex: 1, marginRight: 8 },
+    statusDot: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+    statusDotText: { fontSize: 10, fontWeight: '700' },
+    ticketMeta: { fontSize: 12, color: c.text.light },
+    emptyBox: { backgroundColor: c.white, borderRadius: 14, padding: 24, alignItems: 'center' },
+    emptyText: { color: c.text.light, fontSize: 14 },
 });
 
 export default ChatScreen;

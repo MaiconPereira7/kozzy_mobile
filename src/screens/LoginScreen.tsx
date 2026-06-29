@@ -33,7 +33,15 @@ const LoginScreen = () => {
 
     setLoading(true);
     try {
-      await login({ id: '1', name: 'Maicon Pereira', email, role: 'admin', token: 'token-kozzy' });
+      const lower = email.toLowerCase();
+      const isSupervisor = lower === 'supervisor@kozzy.com' || lower.startsWith('supervisor@');
+      await login({
+        id: isSupervisor ? 'sup1' : '1',
+        name: isSupervisor ? 'Ana Supervisora' : 'João Cliente',
+        email,
+        role: isSupervisor ? 'supervisor' : 'user',
+        token: 'token-kozzy',
+      });
       navigation.replace('App');
     } catch (error: any) {
       Alert.alert('Erro no login', error.message || 'Credenciais inválidas.');
@@ -101,6 +109,9 @@ const LoginScreen = () => {
         </View>
 
         <Text style={styles.footer}>Kozzy Alimentos © 2025</Text>
+        <Text style={styles.hint}>
+          Supervisor: supervisor@kozzy.com{'\n'}Cliente: qualquer outro e-mail
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -127,6 +138,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   loginBtnDisabled: { opacity: 0.6 },
   loginBtnText: { color: c.text.white, fontSize: TYPOGRAPHY.sizes.base, fontWeight: TYPOGRAPHY.weights.bold, letterSpacing: 1 },
   footer: { textAlign: 'center', color: c.border.dark, fontSize: TYPOGRAPHY.sizes.xs, marginTop: SPACING.xxxl },
+  hint: { textAlign: 'center', color: c.text.light, fontSize: TYPOGRAPHY.sizes.xs, marginTop: SPACING.sm, lineHeight: 18 },
 });
 
 export default LoginScreen;

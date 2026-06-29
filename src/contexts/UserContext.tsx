@@ -58,11 +58,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      await AsyncStorage.multiRemove([STORAGE_KEYS.TOKEN, STORAGE_KEYS.USER]);
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.TOKEN,
+        STORAGE_KEYS.USER,
+        STORAGE_KEYS.CHAT_HISTORY, // limpa o histórico do chat ao sair
+      ]);
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     } finally {
-      // Sempre zera o estado, mesmo se o storage falhar
       setUser(null);
     }
   };
