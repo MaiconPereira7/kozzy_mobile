@@ -121,7 +121,15 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>INFORMAÇÕES PESSOAIS</Text>
           <FieldRow label="Nome completo" icon="person-outline" value={isEditing ? tempUser.name ?? '' : user?.name ?? ''} editable={isEditing} onChangeText={v => setTempUser(p => ({ ...p, name: v }))} colors={colors} />
           <FieldRow label="E-mail" icon="mail-outline" value={isEditing ? tempUser.email ?? '' : user?.email ?? ''} editable={isEditing} keyboardType="email-address" onChangeText={v => setTempUser(p => ({ ...p, email: v }))} colors={colors} />
-          <FieldRow label="Senha" icon="lock-closed-outline" value="••••••••" editable={false} secureTextEntry colors={colors} />
+          <TouchableOpacity
+            style={styles.changePassBtn}
+            onPress={() => Alert.alert('Em breve', 'A alteração de senha estará disponível em breve.')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="lock-closed-outline" size={16} color={colors.text.light} />
+            <Text style={styles.changePassText}>Alterar senha</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.text.light} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -192,6 +200,8 @@ const makeStyles = (c: Colors) => StyleSheet.create({
   themeBtnActive: { borderColor: c.primary, backgroundColor: c.status.openBg },
   themeBtnText: { fontSize: TYPOGRAPHY.sizes.sm, color: c.text.light, fontWeight: TYPOGRAPHY.weights.medium },
   themeBtnTextActive: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold },
+  changePassBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: c.backgroundLight, borderRadius: BORDER_RADIUS.lg, borderWidth: 1, borderColor: c.border.light, paddingHorizontal: SPACING.md, height: 48, marginBottom: SPACING.base },
+  changePassText: { flex: 1, fontSize: TYPOGRAPHY.sizes.md, color: c.text.secondary },
   cancelBtn: { backgroundColor: c.white, borderWidth: 1.5, borderColor: c.primary, borderRadius: BORDER_RADIUS.xl, height: 48, justifyContent: 'center', alignItems: 'center', marginBottom: SPACING.md },
   cancelText: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.md },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.xl, height: 48, gap: SPACING.sm },

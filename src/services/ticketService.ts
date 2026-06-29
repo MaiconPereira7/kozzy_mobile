@@ -19,11 +19,13 @@ export const ticketService = {
     const newTicket: Ticket = {
       id: Date.now().toString(),
       status: 'open',
+      priority: 'medium',
       protocol: String(Math.floor(1000 + Math.random() * 9000)),
       date: new Date().toLocaleDateString('pt-BR'),
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       ...data,
     };
+    MOCK_TICKETS.unshift(newTicket); // aparece no topo da lista
     return Promise.resolve(newTicket);
   },
 };

@@ -206,7 +206,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
     newBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, backgroundColor: c.primary, borderRadius: BORDER_RADIUS.lg, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
     newBtnText: { color: c.text.white, fontWeight: TYPOGRAPHY.weights.bold, fontSize: TYPOGRAPHY.sizes.sm },
     filterList: { paddingHorizontal: SPACING.base, paddingVertical: SPACING.md, gap: SPACING.sm },
-    filterChip: { paddingHorizontal: SPACING.base, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.circle, backgroundColor: c.white, borderWidth: 1, borderColor: c.border.medium },
+    filterChip: { paddingHorizontal: SPACING.base, paddingVertical: 5, borderRadius: BORDER_RADIUS.lg, backgroundColor: c.white, borderWidth: 1, borderColor: c.border.medium },
     filterChipActive: { backgroundColor: c.primary, borderColor: c.primary },
     filterText: { fontSize: TYPOGRAPHY.sizes.sm, color: c.text.secondary, fontWeight: TYPOGRAPHY.weights.medium },
     filterTextActive: { color: c.text.white, fontWeight: TYPOGRAPHY.weights.bold },

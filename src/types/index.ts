@@ -40,7 +40,7 @@ export interface TicketCreate {
   subject: string;
   clientType: ClientType;
   category: string;
-  priority: TicketPriority;
+  priority?: TicketPriority;
   description: string;
 }
 

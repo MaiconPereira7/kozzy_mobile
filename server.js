@@ -17,6 +17,7 @@ if (!OPENROUTER_API_KEY) {
 const client = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: OPENROUTER_API_KEY,
+  timeout: 12_000, // 12s por tentativa — garante que 3 modelos cabem nos 45s do app
 });
 
 const SYSTEM_PROMPT = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. Seu principal objetivo é ajudar clientes e abrir tickets de suporte quando necessário.
@@ -39,20 +40,33 @@ Regras importantes:
 - Responda sempre em português brasileiro
 - Seja breve e amigável`;
 
-// Preferência de modelos — testa nessa ordem
+// Modelos de chat preferidos — NÃO incluir code/safety/reasoning especializados
 const PREFERRED = [
+  'cohere/north-mini-code:free',
   'qwen/qwen3-8b:free',
-  'google/gemma-3-27b-it:free',
   'mistralai/mistral-7b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'google/gemma-4-26b-a4b-it:free',
   'deepseek/deepseek-chat:free',
-  'deepseek/deepseek-r1:free',
   'meta-llama/llama-3.1-8b-instruct:free',
-  'nousresearch/hermes-3-llama-3.1-405b:free',
-  'microsoft/phi-3-mini-128k-instruct:free',
 ];
 
-let models = [];     // lista de modelos disponíveis agora
-let modelIdx = 0;    // índice do modelo atual
+// Padrões de modelos especializados que NÃO servem para chat
+const UNSUITABLE = ['content-safety', 'content-filter', 'code:', 'north-mini-code', 'reasoning', 'poolside', 'nemotron'];
+const isChatModel = (id) => !UNSUITABLE.some(p => id.includes(p));
+
+// Blacklist: modelos que deram 429 ficam bloqueados por 5 minutos
+const blacklist = new Map();
+const BLACKLIST_TTL = 5 * 60 * 1000;
+const isBlacklisted = (model) => {
+  const ts = blacklist.get(model);
+  if (!ts) return false;
+  if (Date.now() - ts > BLACKLIST_TTL) { blacklist.delete(model); return false; }
+  return true;
+};
+
+let models = [];
+let modelIdx = 0;
 
 async function loadModels() {
   try {
@@ -60,20 +74,20 @@ async function loadModels() {
       headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
     });
     const { data } = await res.json();
-    const freeSet = new Set(
-      (data ?? []).filter(m => m.id.endsWith(':free')).map(m => m.id)
-    );
-    // Preferred first, then any other free model
+    const freeIds = (data ?? [])
+      .filter(m => m.id.endsWith(':free') && isChatModel(m.id))
+      .map(m => m.id);
+    const freeSet = new Set(freeIds);
     const preferred = PREFERRED.filter(m => freeSet.has(m));
-    const others = [...freeSet].filter(m => !PREFERRED.includes(m));
+    const others = freeIds.filter(m => !PREFERRED.includes(m));
     models = [...preferred, ...others];
     modelIdx = 0;
-    console.log(`✅ ${models.length} modelos gratuitos encontrados`);
-    if (models.length > 0) console.log(`🤖 Iniciando com: ${models[0]}`);
-    else console.warn('⚠️ Nenhum modelo gratuito encontrado no OpenRouter!');
+    console.log(`✅ ${models.length} modelos de chat gratuitos encontrados`);
+    if (models.length > 0) console.log(`🤖 Usando: ${models[0]}`);
+    else console.warn('⚠️ Nenhum modelo encontrado!');
   } catch (err) {
     console.error('Erro ao carregar modelos:', err.message);
-    models = PREFERRED; // fallback estático
+    models = PREFERRED;
   }
 }
 
@@ -82,18 +96,30 @@ async function callAI(messages) {
 
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[modelIdx];
+
+    if (isBlacklisted(model)) {
+      modelIdx = (modelIdx + 1) % models.length;
+      continue;
+    }
+
     try {
       const completion = await client.chat.completions.create({ model, messages });
       const text = completion.choices[0]?.message?.content;
       if (!text) throw new Error('Resposta vazia');
+      // Sucesso: mantém modelIdx no modelo que funcionou
+      console.log(`✅ Resposta ok (${model})`);
       return { text, model };
     } catch (err) {
-      const code = err.status ?? err.code ?? '?';
-      console.warn(`⚠️ ${model} falhou (${code}) — tentando próximo...`);
-      modelIdx = (modelIdx + 1) % models.length;
+      if (err.status === 429) {
+        blacklist.set(model, Date.now());
+        console.warn(`⛔ ${model} → 429, bloqueado por 5 min`);
+      } else {
+        console.warn(`⚠️ ${model} falhou (${err.status ?? '?'}) — próximo...`);
+      }
+      modelIdx = (modelIdx + 1) % models.length; // avança só na falha
     }
   }
-  throw new Error('Todos os modelos gratuitos estão indisponíveis agora. Tente em alguns minutos.');
+  throw new Error('Todos os modelos disponíveis falharam. Tente em alguns minutos.');
 }
 
 app.post('/chat', async (req, res) => {
@@ -101,16 +127,16 @@ app.post('/chat', async (req, res) => {
     if (!req.body?.message) {
       return res.status(400).json({ message: 'Mensagem vazia!' });
     }
-    const { message, userName = 'Cliente' } = req.body;
+    const { message, userName = 'Cliente', history = [] } = req.body;
     console.log(`💬 [${userName}]: ${message}`);
 
     const messages = [
       { role: 'system', content: `${SYSTEM_PROMPT}\nO cliente se chama ${userName}.` },
+      ...history,
       { role: 'user', content: message },
     ];
 
-    const { text, model } = await callAI(messages);
-    console.log(`✅ Resposta ok (${model})`);
+    const { text } = await callAI(messages);
 
     // Detecta se a IA quer criar um ticket
     const ticketMatch = text.match(/KOZZY_TICKET:(\{[^}]+\})/s);

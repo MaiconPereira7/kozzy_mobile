@@ -1,9 +1,8 @@
-// src/services/api.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storage';
 
-// Configure seu IP aqui — apenas em um lugar
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.7:3000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.15.5:3000';
+const TIMEOUT_MS = 45_000;
 
 export interface ApiError {
   message: string;
@@ -30,18 +29,21 @@ export const api = async <T = any>(
     ...customHeaders,
   };
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
   try {
-    // Usa a chave correta centralizada em STORAGE_KEYS
     const token = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
+
+    clearTimeout(timer);
 
     let data: any;
     try {
@@ -60,16 +62,17 @@ export const api = async <T = any>(
 
     return data;
   } catch (error: any) {
+    clearTimeout(timer);
+    if (error.name === 'AbortError') {
+      throw {
+        message: 'Tempo de resposta excedido (45s). Verifique a conexão.',
+        code: 'TIMEOUT',
+      } as ApiError;
+    }
     if (error.message === 'Network request failed' || error.name === 'TypeError') {
       throw {
         message: 'Sem conexão com o servidor. Verifique se o server.js está rodando no PC.',
         code: 'NETWORK_ERROR',
-      } as ApiError;
-    }
-    if (error.name === 'AbortError') {
-      throw {
-        message: 'Tempo de resposta excedido. Tente novamente.',
-        code: 'TIMEOUT',
       } as ApiError;
     }
     throw error;

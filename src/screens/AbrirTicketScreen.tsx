@@ -7,7 +7,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ticketService } from '../services/ticketService';
 import { BORDER_RADIUS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
-import type { TicketPriority } from '../types';
 import type { AppDrawerNavigationProp } from '../types/navigation';
 
 const CATEGORIAS = ['Entrega', 'Faturamento', 'Produto', 'Comercial', 'Suporte TI', 'Outro'];
@@ -18,16 +17,9 @@ export const AbrirTicketScreen = () => {
     const { colors, isDark } = useTheme();
     const styles = useMemo(() => makeStyles(colors), [colors]);
 
-    const PRIORIDADES: { key: TicketPriority; label: string; color: string; bg: string }[] = [
-        { key: 'low', label: 'Baixa', color: colors.priority.low, bg: colors.priority.lowBg },
-        { key: 'medium', label: 'Média', color: colors.priority.medium, bg: colors.priority.mediumBg },
-        { key: 'high', label: 'Alta', color: colors.priority.high, bg: colors.priority.highBg },
-    ];
-
     const [assunto, setAssunto] = useState('');
     const [descricao, setDescricao] = useState('');
     const [categoria, setCategoria] = useState('');
-    const [prioridade, setPrioridade] = useState<TicketPriority>('medium');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async () => {
@@ -42,8 +34,8 @@ export const AbrirTicketScreen = () => {
                 subject: assunto,
                 clientType: 'retail',
                 category: categoria,
-                priority: prioridade,
                 description: descricao,
+                // prioridade definida pelo admin após triagem
             });
             Alert.alert(
                 '✅ Ticket aberto!',
@@ -100,20 +92,6 @@ export const AbrirTicketScreen = () => {
                         ))}
                     </View>
 
-                    <Text style={styles.label}>Prioridade *</Text>
-                    <View style={styles.priorityRow}>
-                        {PRIORIDADES.map(p => (
-                            <TouchableOpacity
-                                key={p.key}
-                                style={[styles.priorityBtn, prioridade === p.key && { backgroundColor: p.bg, borderColor: p.color, borderWidth: 1.5 }]}
-                                onPress={() => setPrioridade(p.key)}
-                            >
-                                <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
-                                <Text style={[styles.priorityText, prioridade === p.key && { color: p.color, fontWeight: TYPOGRAPHY.weights.bold }]}>{p.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
                     <Text style={styles.label}>Descrição *</Text>
                     <TextInput
                         style={styles.textarea}
@@ -159,14 +137,10 @@ const makeStyles = (c: Colors) => StyleSheet.create({
     label: { fontSize: TYPOGRAPHY.sizes.sm, fontWeight: TYPOGRAPHY.weights.bold, color: c.text.primary, marginBottom: SPACING.sm },
     inputBox: { backgroundColor: c.white, borderRadius: BORDER_RADIUS.xl, borderWidth: 1, borderColor: c.border.light, paddingHorizontal: SPACING.md, height: 52, fontSize: TYPOGRAPHY.sizes.md, color: c.text.primary, marginBottom: SPACING.lg },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.lg },
-    chip: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.circle, backgroundColor: c.white, borderWidth: 1, borderColor: c.border.medium },
+    chip: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.xl, backgroundColor: c.white, borderWidth: 1, borderColor: c.border.medium },
     chipActive: { backgroundColor: c.status.openBg, borderColor: c.primary },
     chipText: { fontSize: TYPOGRAPHY.sizes.sm, color: c.text.secondary },
     chipTextActive: { color: c.primary, fontWeight: TYPOGRAPHY.weights.bold },
-    priorityRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
-    priorityBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.white, borderRadius: BORDER_RADIUS.lg, paddingVertical: SPACING.md, borderWidth: 1, borderColor: c.border.medium, gap: SPACING.sm },
-    priorityDot: { width: 8, height: 8, borderRadius: 4 },
-    priorityText: { fontSize: TYPOGRAPHY.sizes.sm, color: c.text.secondary },
     textarea: { backgroundColor: c.white, borderRadius: BORDER_RADIUS.xl, borderWidth: 1, borderColor: c.border.light, padding: SPACING.md, fontSize: TYPOGRAPHY.sizes.md, color: c.text.primary, minHeight: 120, marginBottom: SPACING.xs },
     charCount: { fontSize: TYPOGRAPHY.sizes.xs, color: c.text.light, textAlign: 'right', marginBottom: SPACING.lg },
     solicitanteCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: c.status.openBg, borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.xl },

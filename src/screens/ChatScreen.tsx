@@ -37,7 +37,7 @@ type QuickAction = {
 const QUICK_ACTIONS: QuickAction[] = [
     { label: 'Abrir Ticket', icon: 'ticket-outline', color: '#E01E26', bg: '#FFF0F0', action: 'navigate', target: 'AbrirTicket' },
     { label: 'Meus Tickets', icon: 'list-outline', color: '#3B82F6', bg: '#EFF6FF', action: 'navigate', target: 'MeusTickets' },
-    { label: 'Problema no Pedido', icon: 'cube-outline', color: '#F59E0B', bg: '#FFFBEB', action: 'navigate', target: 'AbrirTicket' },
+    { label: 'Status do Pedido', icon: 'cube-outline', color: '#F59E0B', bg: '#FFFBEB', action: 'message', message: 'Quero saber o status do meu pedido.' },
     { label: 'Falar com Consultor', icon: 'headset-outline', color: '#10B981', bg: '#ECFDF5', action: 'message', message: 'Gostaria de falar com um consultor humano.' },
 ];
 
@@ -121,9 +121,19 @@ export const ChatScreen = () => {
         setIsLoading(true);
 
         try {
+            // Envia histórico (últimas 10 trocas) para a IA ter contexto
+            const history = messages
+                .filter(m => !m.failed && m.id !== 'welcome')
+                .slice(-10)
+                .map(m => ({
+                    role: m.type === 'user' ? 'user' : 'assistant',
+                    content: m.text,
+                }));
+
             const response = await apiPost('/chat', {
                 message: texto,
                 userName: user?.name || 'Usuário',
+                history,
             });
 
             if (response?.createTicket) {
@@ -343,7 +353,7 @@ const makeStyles = (c: Colors) => StyleSheet.create({
     clearBtn: { padding: 4 },
     menuBtn: { padding: 4 },
 
-    scrollContent: { padding: 16 },
+    scrollContent: { padding: 16, paddingTop: 24 },
     actionsSection: { marginBottom: 8 },
     actionsLabel: { fontSize: 10, fontWeight: '800', color: c.text.light, letterSpacing: 1.5, marginBottom: 12, marginLeft: 2 },
     actionsGrid: { gap: 8 },
