@@ -34,7 +34,7 @@ export interface ApiResponse<T = any> {
 
 export const api = async <T = any>(
   endpoint: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: any,
   customHeaders?: Record<string, string>
 ): Promise<T> => {
@@ -87,7 +87,26 @@ export const api = async <T = any>(
 export const apiGet    = <T = any>(e: string, h?: Record<string, string>) => api<T>(e, 'GET', undefined, h);
 export const apiPost   = <T = any>(e: string, b: any, h?: Record<string, string>) => api<T>(e, 'POST', b, h);
 export const apiPut    = <T = any>(e: string, b: any, h?: Record<string, string>) => api<T>(e, 'PUT', b, h);
+export const apiPatch  = <T = any>(e: string, b: any, h?: Record<string, string>) => api<T>(e, 'PATCH', b, h);
 export const apiDelete = <T = any>(e: string, h?: Record<string, string>) => api<T>(e, 'DELETE', undefined, h);
+
+interface AuthResponse {
+  success: boolean;
+  user: { id: string; name: string; email: string; role: 'user' | 'supervisor' | 'admin' };
+  token: string;
+}
+
+export const apiLogin = async (email: string, password: string): Promise<AuthResponse> => {
+  const data = await apiPost<AuthResponse>('/auth/login', { email, password });
+  if (data.token) await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+  return data;
+};
+
+export const apiRegister = async (name: string, email: string, password: string): Promise<AuthResponse> => {
+  const data = await apiPost<AuthResponse>('/auth/register', { name, email, password });
+  if (data.token) await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+  return data;
+};
 
 export const handleApiError = (error: ApiError): string => {
   const map: Record<string | number, string> = {

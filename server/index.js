@@ -3,11 +3,16 @@ const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
 const mongoose = require('mongoose');
+const authRoutes = require('./routes/auth');
+const { optionalAuth } = require('./middleware/auth');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+app.use('/auth', authRoutes);
 
 // ─── MongoDB ──────────────────────────────────────────────────────────────────
 
@@ -29,56 +34,35 @@ const ticketSchema = new mongoose.Schema({
   status:      { type: String, default: 'open', enum: ['open', 'inProgress', 'closed'] },
   priority:    { type: String, default: 'medium', enum: ['low', 'medium', 'high', 'critical'] },
   clientType:  { type: String, default: 'retail' },
-  responses:   [{
-    id:         String,
-    text:       String,
-    author:     String,
-    authorRole: String,
-    createdAt:  String,
-  }],
-  rating: {
-    stars:   Number,
-    comment: String,
-  },
-  createdAt: { type: String, default: () => new Date().toISOString() },
-  updatedAt: { type: String, default: () => new Date().toISOString() },
+  responses:   [{ id: String, text: String, author: String, authorRole: String, createdAt: String }],
+  rating:      { stars: Number, comment: String },
+  createdAt:   { type: String, default: () => new Date().toISOString() },
+  updatedAt:   { type: String, default: () => new Date().toISOString() },
 });
 
 const TicketModel = mongoose.model('Ticket', ticketSchema);
-
-// Verifica se o banco está disponível
 const dbReady = () => mongoose.connection.readyState === 1;
 
 // ─── Endpoints de Tickets ─────────────────────────────────────────────────────
 
-// Gera protocolo único
 function generateProtocol() {
   return `KZY${Date.now().toString().slice(-6)}`;
 }
 
-// GET /tickets — todos os tickets (supervisor)
 app.get('/tickets', async (_req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
-    const tickets = await TicketModel.find().sort({ createdAt: -1 }).lean();
-    res.json(tickets);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+    res.json(await TicketModel.find().sort({ createdAt: -1 }).lean());
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// GET /tickets/mine/:name — tickets de um cliente específico
 app.get('/tickets/mine/:name', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
-    const tickets = await TicketModel.find({ name: req.params.name }).sort({ createdAt: -1 }).lean();
-    res.json(tickets);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+    res.json(await TicketModel.find({ name: req.params.name }).sort({ createdAt: -1 }).lean());
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// POST /tickets — criar ticket
 app.post('/tickets', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
@@ -87,107 +71,67 @@ app.post('/tickets', async (req, res) => {
       return res.status(400).json({ message: 'Campos obrigatórios faltando' });
     }
     const ticket = await TicketModel.create({
-      protocol: generateProtocol(),
-      name, subject, category, description,
-      clientType: clientType ?? 'retail',
-      priority: priority ?? 'medium',
+      protocol: generateProtocol(), name, subject, category, description,
+      clientType: clientType ?? 'retail', priority: priority ?? 'medium',
     });
     console.log(`🎫 Ticket criado: ${ticket.protocol} — ${subject}`);
     res.status(201).json(ticket);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// PATCH /tickets/:id/response — adicionar resposta (supervisor)
 app.patch('/tickets/:id/response', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
     const { text, author, authorRole } = req.body;
-    const response = {
-      id:         `r_${Date.now()}`,
-      text,
-      author:     author ?? 'Suporte',
-      authorRole: authorRole ?? 'supervisor',
-      createdAt:  new Date().toISOString(),
-    };
     const ticket = await TicketModel.findByIdAndUpdate(
       req.params.id,
-      {
-        $push: { responses: response },
-        $set:  { status: 'inProgress', updatedAt: new Date().toISOString() },
-      },
+      { $push: { responses: { id: `r_${Date.now()}`, text, author: author ?? 'Suporte', authorRole: authorRole ?? 'supervisor', createdAt: new Date().toISOString() } }, $set: { status: 'inProgress', updatedAt: new Date().toISOString() } },
       { new: true }
     );
     if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
     res.json(ticket);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// PATCH /tickets/:id/priority — atualizar prioridade
 app.patch('/tickets/:id/priority', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
-    const ticket = await TicketModel.findByIdAndUpdate(
-      req.params.id,
-      { $set: { priority: req.body.priority, updatedAt: new Date().toISOString() } },
-      { new: true }
-    );
+    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { priority: req.body.priority, updatedAt: new Date().toISOString() } }, { new: true });
     if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
     res.json(ticket);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// PATCH /tickets/:id/status — fechar ticket
 app.patch('/tickets/:id/status', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
-    const ticket = await TicketModel.findByIdAndUpdate(
-      req.params.id,
-      { $set: { status: req.body.status, updatedAt: new Date().toISOString() } },
-      { new: true }
-    );
+    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { status: req.body.status, updatedAt: new Date().toISOString() } }, { new: true });
     if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
     res.json(ticket);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// PATCH /tickets/:id/rate — avaliar ticket
 app.patch('/tickets/:id/rate', async (req, res) => {
   if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
   try {
     const { stars, comment } = req.body;
-    const ticket = await TicketModel.findByIdAndUpdate(
-      req.params.id,
-      { $set: { rating: { stars, comment }, status: 'closed', updatedAt: new Date().toISOString() } },
-      { new: true }
-    );
+    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { rating: { stars, comment }, status: 'closed', updatedAt: new Date().toISOString() } }, { new: true });
     if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
     res.json(ticket);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // ─── IA ───────────────────────────────────────────────────────────────────────
 
-const GEMINI_API_KEY    = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY     = process.env.GEMINI_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Gemini via endpoint OpenAI-compatível (primário — cota dedicada ao projeto)
 const geminiClient = GEMINI_API_KEY ? new OpenAI({
   baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
   apiKey: GEMINI_API_KEY,
   timeout: 20_000,
 }) : null;
 
-// OpenRouter (fallback quando Gemini falha)
 const openrouterClient = OPENROUTER_API_KEY ? new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: OPENROUTER_API_KEY,
@@ -269,24 +213,20 @@ async function loadModels() {
       headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
     });
     const { data } = await res.json();
-    const freeIds = (data ?? [])
-      .filter(m => m.id.endsWith(':free') && isChatModel(m.id))
-      .map(m => m.id);
+    const freeIds = (data ?? []).filter(m => m.id.endsWith(':free') && isChatModel(m.id)).map(m => m.id);
     const freeSet = new Set(freeIds);
     const preferred = PREFERRED.filter(m => freeSet.has(m));
     const others = freeIds.filter(m => !PREFERRED.includes(m));
     models = [...preferred, ...others];
     modelIdx = 0;
     console.log(`✅ ${models.length} modelos de chat gratuitos encontrados`);
-    if (models.length > 0) console.log(`🤖 Usando: ${models[0]}`);
-    else console.warn('⚠️ Nenhum modelo encontrado!');
+    if (models.length > 0) console.log(`🤖 Fallback: ${models[0]}`);
   } catch (err) {
     console.error('Erro ao carregar modelos:', err.message);
     models = PREFERRED;
   }
 }
 
-// Tenta Gemini primeiro; se falhar, cai no OpenRouter
 async function callAI(messages) {
   // ── 1. Gemini (primário) ──────────────────────────────────────────────────
   if (geminiClient) {
@@ -298,7 +238,7 @@ async function callAI(messages) {
         console.log(`✅ Gemini ok (${model})`);
         return { text, model };
       } catch (err) {
-        console.warn(`⚠️ Gemini ${model} falhou (${err.status ?? err.message}) — próximo...`);
+        console.warn(`⚠️ Gemini ${model} falhou (${err.status ?? err.message})`);
       }
     }
   }
@@ -309,17 +249,13 @@ async function callAI(messages) {
 
   for (let attempt = 0; attempt < models.length; attempt++) {
     let model = models[modelIdx];
-
     if (isBlacklisted(model)) {
       modelIdx = (modelIdx + 1) % models.length;
       if (attempt === models.length - 1) {
         model = leastRecentlyBlocked() ?? model;
         console.warn(`⚡ Todos bloqueados — tentando ${model} (menos recente)`);
-      } else {
-        continue;
-      }
+      } else { continue; }
     }
-
     try {
       const completion = await openrouterClient.chat.completions.create({ model, messages });
       const text = completion.choices[0]?.message?.content;
@@ -327,28 +263,23 @@ async function callAI(messages) {
       console.log(`✅ OpenRouter ok (${model})`);
       return { text, model };
     } catch (err) {
-      if (err.status === 429) {
-        blacklist.set(model, Date.now());
-        console.warn(`⛔ ${model} → 429, bloqueado por 10 min`);
-      } else {
-        console.warn(`⚠️ ${model} falhou (${err.status ?? '?'}) — próximo...`);
-      }
+      if (err.status === 429) { blacklist.set(model, Date.now()); console.warn(`⛔ ${model} → 429, bloqueado por 10 min`); }
+      else { console.warn(`⚠️ ${model} falhou (${err.status ?? '?'})`); }
       modelIdx = (modelIdx + 1) % models.length;
     }
   }
   throw new Error('Todos os modelos disponíveis falharam. Tente em alguns minutos.');
 }
 
-app.post('/chat', async (req, res) => {
+app.post('/chat', optionalAuth, async (req, res) => {
   try {
-    if (!req.body?.message) {
-      return res.status(400).json({ message: 'Mensagem vazia!' });
-    }
+    if (!req.body?.message) return res.status(400).json({ message: 'Mensagem vazia!' });
     const { message, userName = 'Cliente', history = [] } = req.body;
-    console.log(`💬 [${userName}]: ${message}`);
+    const name = req.user?.name ?? userName;
+    console.log(`💬 [${name}]: ${message}`);
 
     const messages = [
-      { role: 'system', content: `${SYSTEM_PROMPT}\nO cliente se chama ${userName}.` },
+      { role: 'system', content: `${SYSTEM_PROMPT}\nO cliente se chama ${name}.` },
       ...history,
       { role: 'user', content: message },
     ];
@@ -376,31 +307,26 @@ app.post('/chat', async (req, res) => {
               ticketData.subject?.trim().length >= 5 &&
               ticketData.description?.trim().split(/\s+/).length >= 5 &&
               VALID_CATEGORIES.includes(ticketData.category);
-
             if (validTicket) {
               const cleanText = text.slice(0, markerIdx) + text.slice(jsonEnd + 1);
-              console.log(`🎫 Ticket criado via IA:`, ticketData);
+              console.log(`🎫 Ticket IA:`, ticketData);
               return res.json({ response: cleanText.trim(), createTicket: ticketData });
             }
             console.warn('🚫 Ticket rejeitado — dados insuficientes:', ticketData);
           } catch { /* JSON inválido */ }
         }
-
         // Fallback: ] em vez de }
         const afterOpen = text.slice(jsonStart);
         const bracketIdx = afterOpen.search(/\](?=\s*\n|$)/);
         if (bracketIdx !== -1) {
           try {
             const ticketData = JSON.parse(afterOpen.slice(0, bracketIdx) + '}');
-            const endPos = jsonStart + bracketIdx;
-            const cleanText = text.slice(0, markerIdx) + text.slice(endPos + 1);
-            console.log(`🎫 Ticket detectado (fallback ]):`, ticketData);
+            const cleanText = text.slice(0, markerIdx) + text.slice(jsonStart + bracketIdx + 1);
             return res.json({ response: cleanText.trim(), createTicket: ticketData });
           } catch { /* ainda inválido */ }
         }
       }
     }
-
     res.json({ response: text });
   } catch (error) {
     const msg = error?.message ?? String(error);
@@ -420,7 +346,8 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.listen(3000, async () => {
-  console.log('🚀 Servidor Kozzy rodando em http://localhost:3000');
-  await loadModels();
+const PORT = process.env.PORT ?? 3000;
+app.listen(PORT, async () => {
+  console.log(`🚀 Servidor Kozzy rodando em http://localhost:${PORT}`);
+  if (openrouterClient) await loadModels();
 });

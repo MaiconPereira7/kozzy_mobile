@@ -138,6 +138,15 @@ export interface ApiErrorResponse {
   errors?: { [key: string]: string };
 }
 
+// ============= CHAT TYPES =============
+export interface ChatMessage {
+  id: string;
+  text: string;
+  type: 'user' | 'bot';
+  time: string;
+  failed?: boolean;
+}
+
 // ============= UTILITY TYPES =============
 export type DeepPartial<T> = {
   [P in keyof T]?: DeepPartial<T[P]>;
