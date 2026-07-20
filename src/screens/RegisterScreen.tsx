@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useUser } from '../contexts/UserContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { apiRegister } from '../services/api';
+import { authService } from '../services/authService';
 import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import type { RootNavigationProp } from '../types/navigation';
@@ -38,8 +38,8 @@ const RegisterScreen = () => {
 
     setLoading(true);
     try {
-      const { user: apiUser, token } = await apiRegister(name.trim(), email.trim(), password);
-      await login({ ...apiUser, token });
+      const userData = await authService.register(name.trim(), email.trim(), password);
+      await login(userData);
       navigation.replace('App');
     } catch (error: any) {
       const msg = error?.code === 409

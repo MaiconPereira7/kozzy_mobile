@@ -2,10 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    Animated, KeyboardAvoidingView, Platform, ScrollView,
+    StatusBar, StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
-import { apiPost } from '../services/api';
+import { aiApiPost, apiGet, apiPut } from '../services/api';
+import { socketService } from '../services/socketService';
 import { ticketService } from '../services/ticketService';
 import { STORAGE_KEYS } from '../constants/storage';
 import type { ChatMessage, Ticket } from '../types';
@@ -24,6 +28,53 @@ const getNow = () => {
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 };
 
+// ─── Live Chat Header ─────────────────────────────────────────────────────────
+const LiveChatHeader = ({ onEnd }: { onEnd: () => void }) => {
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1,   duration: 700, useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulseAnim]);
+
+    return (
+        <View style={liveHeaderStyles.container}>
+            <View style={liveHeaderStyles.left}>
+                <View style={liveHeaderStyles.avatar}><Text style={liveHeaderStyles.avatarText}>KZ</Text></View>
+                <View>
+                    <Text style={liveHeaderStyles.title}>Chat ao Vivo</Text>
+                    <View style={liveHeaderStyles.subRow}>
+                        <Animated.View style={[liveHeaderStyles.dot, { opacity: pulseAnim }]} />
+                        <Text style={liveHeaderStyles.sub}>Aguardando atendente</Text>
+                    </View>
+                </View>
+            </View>
+            <TouchableOpacity onPress={onEnd} style={liveHeaderStyles.endBtn} activeOpacity={0.8}>
+                <Text style={liveHeaderStyles.endText}>Encerrar</Text>
+            </TouchableOpacity>
+        </View>
+    );
+};
+
+const liveHeaderStyles = StyleSheet.create({
+    container: { backgroundColor: '#10B981', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 8 : 54, paddingBottom: 14, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    left: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.25)', justifyContent: 'center', alignItems: 'center' },
+    avatarText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+    title: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+    subRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+    dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF' },
+    sub: { color: 'rgba(255,255,255,0.85)', fontSize: 11 },
+    endBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
+    endText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+});
+
 // ─── Painel do Supervisor ────────────────────────────────────────────────────
 const SupervisorPanel = () => {
     const { user } = useUser();
@@ -32,11 +83,23 @@ const SupervisorPanel = () => {
     const navigation = useNavigation<AppDrawerNavigationProp>();
     const [tickets, setTickets] = useState<Ticket[]>([]);
 
-    useEffect(() => { ticketService.getAllTickets().then(setTickets); }, []);
+    const loadTickets = useCallback(() => {
+        ticketService.getAllTickets().then(setTickets).catch(() => {});
+    }, []);
 
-    const open       = tickets.filter(t => t.status === 'open').length;
-    const inProgress = tickets.filter(t => t.status === 'inProgress').length;
-    const closed     = tickets.filter(t => t.status === 'closed').length;
+    useEffect(() => {
+        loadTickets();
+        socketService.on('chamado:novo',       loadTickets);
+        socketService.on('chamado:atualizado', loadTickets);
+        return () => {
+            socketService.off('chamado:novo');
+            socketService.off('chamado:atualizado');
+        };
+    }, [loadTickets]);
+
+    const open         = tickets.filter(t => t.status === 'open').length;
+    const inProgress   = tickets.filter(t => t.status === 'inProgress').length;
+    const closed       = tickets.filter(t => t.status === 'closed').length;
     const highPriority = tickets.filter(t => t.priority === 'high' && t.status !== 'closed').length;
 
     return (
@@ -88,7 +151,7 @@ const SupervisorPanel = () => {
                 {tickets.slice(0, 4).length === 0 ? (
                     <View style={panelStyles.emptyBox}><Text style={panelStyles.emptyText}>Nenhum chamado registrado ainda.</Text></View>
                 ) : tickets.slice(0, 4).map(t => {
-                    const sc = { open: colors.status.open, inProgress: colors.status.inProgress, closed: colors.status.closed }[t.status];
+                    const sc    = { open: colors.status.open, inProgress: colors.status.inProgress, closed: colors.status.closed }[t.status];
                     const label = { open: 'Aberto', inProgress: 'Andamento', closed: 'Encerrado' }[t.status];
                     return (
                         <View key={t.id} style={panelStyles.ticketCard}>
@@ -121,12 +184,17 @@ const ClientChat = () => {
     const styles = useMemo(() => makeStyles(colors), [colors]);
     const { status: serverStatus } = useServerStatus(30_000);
 
-    const [inputText, setInputText]   = useState('');
-    const [isLoading, setIsLoading]   = useState(false);
-    const [errorToast, setErrorToast] = useState('');
+    const [inputText, setInputText]       = useState('');
+    const [isLoading, setIsLoading]       = useState(false);
+    const [errorToast, setErrorToast]     = useState('');
     const [rateLimitMsg, setRateLimitMsg] = useState('');
-    const scrollViewRef = useRef<ScrollView>(null);
-    const msgTimestamps = useRef<number[]>([]);
+    const scrollViewRef  = useRef<ScrollView>(null);
+    const msgTimestamps  = useRef<number[]>([]);
+
+    // Live chat
+    const [chatMode, setChatMode]             = useState<'bot' | 'live'>('bot');
+    const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+    const seenCommentKeys = useRef<Set<string>>(new Set());
 
     const firstName = user?.name?.split(' ')[0] || 'você';
     const welcomeMsg: ChatMessage = useMemo(() => ({
@@ -170,6 +238,94 @@ const ClientChat = () => {
 
     const clearChat = () => { setMessages([welcomeMsg]); AsyncStorage.removeItem(STORAGE_KEYS.CHAT_HISTORY); };
 
+    // ── Inicia chat ao vivo ────────────────────────────────────────────────────
+    const startLiveChat = async () => {
+        setIsLoading(true);
+        try {
+            const ticket = await ticketService.createLiveChatTicket(user?.name ?? 'Cliente');
+            setActiveTicketId(ticket.id);
+            seenCommentKeys.current = new Set();
+            setChatMode('live');
+            addMessage('🤝 Você está no chat ao vivo!\n\nUm atendente irá responder em breve. Pode digitar sua dúvida enquanto aguarda.', 'bot');
+        } catch {
+            addMessage('❌ Não foi possível iniciar o chat ao vivo agora. Tente novamente ou abra um ticket.', 'bot');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // ── Encerra chat ao vivo ──────────────────────────────────────────────────
+    const endLiveChat = async () => {
+        if (!activeTicketId) return;
+        try { await apiPut(`/atendimentos/${activeTicketId}`, { avanco: 'encerrado' }); } catch { /* best effort */ }
+        setChatMode('bot');
+        setActiveTicketId(null);
+        addMessage('Atendimento encerrado. Voltando para a assistente virtual. 👋', 'bot');
+    };
+
+    // ── Socket: ouve atualizações do chamado em tempo real ────────────────────
+    useEffect(() => {
+        if (chatMode !== 'live' || !activeTicketId) return;
+
+        const handleUpdate = (data: any) => {
+            const id = data._id ?? data.id;
+            if (id !== activeTicketId) return;
+
+            if (data.avanco === 'concluido' || data.avanco === 'encerrado') {
+                setChatMode('bot');
+                setActiveTicketId(null);
+                addMessage('✅ Atendimento encerrado pelo suporte. Voltando para a assistente virtual.', 'bot');
+                return;
+            }
+
+            const comments: any[] = data.comentarios ?? [];
+            comments.forEach(c => {
+                const key = c._id ?? c.dataCriacao ?? JSON.stringify(c);
+                if (seenCommentKeys.current.has(key)) return;
+                if (!c.isPrivado && c.usuario?.perfilAcesso !== 'cliente') {
+                    addMessage(`👤 ${c.usuario?.nomeCompleto ?? 'Atendente'}: ${c.mensagem}`, 'bot');
+                    seenCommentKeys.current.add(key);
+                }
+            });
+        };
+
+        socketService.on('chamado:atualizado', handleUpdate);
+        return () => socketService.off('chamado:atualizado');
+    }, [chatMode, activeTicketId, addMessage]);
+
+    // ── Polling de fallback a cada 10s ────────────────────────────────────────
+    useEffect(() => {
+        if (chatMode !== 'live' || !activeTicketId) return;
+
+        const poll = async () => {
+            try {
+                const data = await apiGet<any>(`/atendimentos/${activeTicketId}`);
+                if (!data) return;
+
+                if (data.avanco === 'concluido' || data.avanco === 'encerrado') {
+                    setChatMode('bot');
+                    setActiveTicketId(null);
+                    addMessage('✅ Atendimento encerrado. Voltando para a assistente virtual.', 'bot');
+                    return;
+                }
+
+                const comments: any[] = data.comentarios ?? [];
+                comments.forEach(c => {
+                    const key = c._id ?? c.dataCriacao ?? JSON.stringify(c);
+                    if (seenCommentKeys.current.has(key)) return;
+                    if (!c.isPrivado && c.usuario?.perfilAcesso !== 'cliente') {
+                        addMessage(`👤 ${c.usuario?.nomeCompleto ?? 'Atendente'}: ${c.mensagem}`, 'bot');
+                        seenCommentKeys.current.add(key);
+                    }
+                });
+            } catch { /* rede instável, tentar novamente na próxima poll */ }
+        };
+
+        const interval = setInterval(poll, 10_000);
+        return () => clearInterval(interval);
+    }, [chatMode, activeTicketId, addMessage]);
+
+    // ── Enviar mensagem ───────────────────────────────────────────────────────
     const handleSend = async (override?: string, retryId?: string) => {
         const texto = (override || inputText).trim();
         if (!texto || isLoading) return;
@@ -183,6 +339,22 @@ const ClientChat = () => {
             userMsgId = addMessage(texto, 'user');
             setInputText('');
         }
+
+        // Modo live: envia como comentário no chamado
+        if (chatMode === 'live' && activeTicketId) {
+            setIsLoading(true);
+            try {
+                await ticketService.addComment(activeTicketId, texto);
+            } catch {
+                setMessages(prev => prev.map(m => m.id === userMsgId ? { ...m, failed: true } : m));
+                showError('Falha ao enviar. Toque em Reenviar para tentar novamente.');
+            } finally {
+                setIsLoading(false);
+            }
+            return;
+        }
+
+        // Modo bot: envia para servidor de IA
         setIsLoading(true);
         try {
             const history = messages
@@ -190,7 +362,7 @@ const ClientChat = () => {
                 .slice(-10)
                 .map(m => ({ role: m.type === 'user' ? 'user' : 'assistant', content: m.text }));
 
-            const response = await apiPost('/chat', { message: texto, userName: user?.name || 'Usuário', history });
+            const response = await aiApiPost('/chat', { message: texto, userName: user?.name || 'Usuário', history });
 
             if (response?.createTicket) {
                 try {
@@ -210,7 +382,7 @@ const ClientChat = () => {
         } catch (err: any) {
             console.warn('[Kozzy] Falha ao enviar:', err?.message ?? err);
             setMessages(prev => prev.map(m => m.id === userMsgId ? { ...m, failed: true } : m));
-            showError('Sem conexão com o servidor. Toque em Reenviar para tentar novamente.');
+            showError('Sem conexão com o servidor de IA. Toque em Reenviar para tentar novamente.');
         } finally {
             setIsLoading(false);
         }
@@ -219,10 +391,12 @@ const ClientChat = () => {
     const navigation = useNavigation<AppDrawerNavigationProp>();
     const handleAction = (action: QuickAction) => {
         if (action.action === 'navigate' && action.target) navigation.navigate(action.target);
+        else if (action.action === 'live') startLiveChat();
         else if (action.action === 'message' && action.message) handleSend(action.message);
     };
 
     const getSuggestions = (): string[] => {
+        if (chatMode === 'live') return [];
         const lastBot = [...messages].reverse().find(m => m.type === 'bot' && !m.failed);
         if (!lastBot || isLoading) return [];
         const t = lastBot.text.toLowerCase();
@@ -233,22 +407,29 @@ const ClientChat = () => {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#E01E26" />
-            <ChatHeader onClear={clearChat} />
+            <StatusBar barStyle="light-content" backgroundColor={chatMode === 'live' ? '#10B981' : '#E01E26'} />
+            {chatMode === 'live'
+                ? <LiveChatHeader onEnd={endLiveChat} />
+                : <ChatHeader onClear={clearChat} />
+            }
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    <QuickActions onAction={handleAction} colors={colors} isDark={isDark} />
-                    <View style={styles.dividerRow}>
-                        <View style={styles.dividerLine} />
-                        <Text style={styles.dividerText}>conversa</Text>
-                        <View style={styles.dividerLine} />
-                    </View>
+                    {chatMode === 'bot' && <QuickActions onAction={handleAction} colors={colors} isDark={isDark} />}
+                    {chatMode === 'bot' && (
+                        <View style={styles.dividerRow}>
+                            <View style={styles.dividerLine} />
+                            <Text style={styles.dividerText}>conversa</Text>
+                            <View style={styles.dividerLine} />
+                        </View>
+                    )}
                     {messages.map(msg => (
                         <MessageBubble key={msg.id} message={msg} colors={colors} onRetry={m => handleSend(m.text, m.id)} />
                     ))}
                     {isLoading && (
                         <View style={styles.botRow}>
-                            <View style={styles.botAvatar}><Text style={styles.botAvatarText}>KZ</Text></View>
+                            <View style={[styles.botAvatar, chatMode === 'live' && { backgroundColor: '#10B981' }]}>
+                                <Text style={styles.botAvatarText}>KZ</Text>
+                            </View>
                             <View style={[styles.typingBubble, { backgroundColor: colors.white }]}>
                                 <View style={styles.typingDots}>
                                     <View style={[styles.dot, { backgroundColor: colors.border.medium }]} />
@@ -260,11 +441,11 @@ const ClientChat = () => {
                     )}
                     <View style={{ height: 12 }} />
                 </ScrollView>
-                <SuggestionChips suggestions={getSuggestions()} onSelect={s => handleSend(s)} colors={colors} />
-                {serverStatus === 'offline' && (
+                {chatMode === 'bot' && <SuggestionChips suggestions={getSuggestions()} onSelect={s => handleSend(s)} colors={colors} />}
+                {serverStatus === 'offline' && chatMode === 'bot' && (
                     <View style={[styles.toast, { backgroundColor: '#374151' }]}>
                         <Ionicons name="cloud-offline-outline" size={15} color="#FFF" />
-                        <Text style={styles.toastText}>Servidor offline — verifique a conexão</Text>
+                        <Text style={styles.toastText}>Servidor de IA offline — verifique a conexão</Text>
                     </View>
                 )}
                 {!!rateLimitMsg && (
@@ -284,6 +465,8 @@ const ClientChat = () => {
         </View>
     );
 };
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const makeStyles = (c: Colors) => StyleSheet.create({
     container: { flex: 1, backgroundColor: c.backgroundLight },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getServerUrl } from '../services/api';
+import { getAIServerUrl } from '../services/api';
 
 type Status = 'checking' | 'online' | 'offline';
 
@@ -11,7 +11,7 @@ export const useServerStatus = (intervalMs = 30_000) => {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5_000);
-      const res = await fetch(`${getServerUrl()}/health`, { signal: controller.signal });
+      const res = await fetch(`${getAIServerUrl()}/health`, { signal: controller.signal });
       clearTimeout(timeout);
       setStatus(res.ok ? 'online' : 'offline');
     } catch {

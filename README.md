@@ -1,4 +1,4 @@
-# 🍔 Kozzy Mobile
+# Kozzy Mobile
 
 > Sistema de atendimento inteligente para a Kozzy Alimentos
 
@@ -8,18 +8,48 @@
 
 ## Sobre
 
-App React Native para atendimento ao cliente da Kozzy Alimentos. Os clientes interagem com um **chatbot IA** que guia a abertura de chamados de suporte de forma conversacional, sem precisar preencher formulários manualmente. Supervisores têm acesso a um painel dedicado com dashboard operacional.
+App React Native para atendimento ao cliente da Kozzy Alimentos. Clientes interagem com um **chatbot IA** que guia a abertura de chamados de forma conversacional. Quando necessário, o cliente pode ser transferido para um **atendente humano via chat ao vivo** em tempo real (Socket.io). Supervisores têm acesso a um painel dedicado com dashboard operacional atualizado em tempo real.
 
 ## Features
 
-- 🤖 **Chatbot IA** — multi-modelo com fallback automático (Gemini primário + OpenRouter)
-- 🎫 **Tickets com protocolo** — criados automaticamente pela IA após coleta de informações
-- 📊 **Painel Supervisor** — dashboard com métricas, prioridades e últimos chamados
-- 🔐 **Autenticação JWT** — login/cadastro com bcrypt, token persistido
-- 🌙 **Dark/Light mode** — sistema ou manual, persistido por usuário
-- 🔔 **Notificações** — tickets novos e respostas do suporte
-- 🏎️ **Rate limiting** — 5 mensagens/minuto no chat
-- 📱 **Offline banner** — detecta servidor offline automaticamente
+- Chatbot IA — multi-modelo com fallback automático (Gemini primário + OpenRouter)
+- Tickets com protocolo — criados automaticamente pela IA após coleta de informações
+- Chat ao Vivo — handoff bot→humano via Socket.io com polling de fallback a cada 10s
+- Painel Supervisor — dashboard com métricas e lista em tempo real via Socket.io
+- Autenticação real — login/cadastro com contas do backend MongoDB
+- Dark/Light mode — sistema ou manual, persistido por usuário
+- Notificações — tickets novos e respostas do suporte
+- Rate limiting — 5 mensagens/minuto no chat
+- Offline gracioso — app funciona em modo bot se o backend real estiver fora
+
+## Arquitetura
+
+```
+┌──────────────────────────┐
+│   App Mobile (Expo)      │
+│   React Native + TS      │
+└──────────┬───────────────┘
+           │
+     ┌─────┴──────────────────────────┐
+     │                                │
+     ▼                                ▼
+┌─────────────────────┐    ┌──────────────────────┐
+│  kozzy-backend      │    │  server/ (IA local)  │
+│  (Render/produção)  │    │  Express :3001       │
+│                     │    │                      │
+│  POST /usuarios/    │    │  POST /chat          │
+│    login|register   │    │  GET  /health        │
+│  GET/POST/PUT       │    │                      │
+│    /atendimentos    │    │  Gemini 2.0 Flash    │
+│  Socket.io          │    │  OpenRouter (fallback│
+│  MongoDB Atlas      │    └──────────────────────┘
+└─────────────────────┘
+           │
+     ┌─────┴────────────────┐
+     │  kozzy-frontend      │
+     │  (painel web)        │
+     └──────────────────────┘
+```
 
 ## Tech Stack
 
@@ -29,10 +59,10 @@ App React Native para atendimento ao cliente da Kozzy Alimentos. Os clientes int
 | Linguagem | TypeScript (strict) |
 | Navegação | React Navigation v7 (Stack + Drawer) |
 | Estado | Context API (UserContext, ThemeContext) |
-| Backend | Express.js 5 |
-| IA | OpenRouter API + Gemini API |
-| Auth | JWT + bcrypt |
-| Persistência | AsyncStorage (app) · In-memory (server) |
+| Tempo real | socket.io-client |
+| Backend | kozzy-backend (Render) |
+| IA | Gemini API + OpenRouter (servidor local) |
+| Persistência | AsyncStorage (app) · MongoDB Atlas (backend) |
 
 ## Estrutura do Projeto
 
@@ -41,23 +71,24 @@ kozzy_mobile/
 ├── src/
 │   ├── components/
 │   │   ├── chat/           # MessageBubble, ChatInput, ChatHeader, QuickActions, SuggestionChips
-│   │   └── common/         # Button, Input, Badge
-│   ├── contexts/           # UserContext, ThemeContext
+│   │   └── common/
+│   ├── contexts/           # UserContext (+ socket), ThemeContext
 │   ├── hooks/              # useServerStatus
 │   ├── routes/             # AppDrawer, index (Stack Navigator)
-│   ├── screens/            # Login, Register, Chat, MeusTickets, AbrirTicket, Profile, ...
-│   ├── services/           # api.ts, ticketService.ts, notificationService.ts
-│   ├── theme/              # colors, spacing, typography
-│   └── types/              # Ticket, ChatMessage, navigation, ...
-├── server/
-│   ├── middleware/
-│   │   └── auth.js         # requireAuth, optionalAuth, generateToken
-│   ├── routes/
-│   │   └── auth.js         # POST /auth/login, POST /auth/register, GET /auth/me
-│   ├── index.js            # Express app: /chat, /tickets, /health + auth
+│   ├── screens/            # Login, Register, Chat (bot+live), MeusTickets, AbrirTicket, Profile, ...
+│   ├── services/
+│   │   ├── api.ts          # fetch wrapper — _baseUrl (backend) + _aiUrl (IA)
+│   │   ├── authService.ts  # login/register com kozzy-backend
+│   │   ├── socketService.ts# singleton Socket.io
+│   │   └── ticketService.ts# CRUD /atendimentos com field mapping
+│   ├── theme/
+│   └── types/
+├── server/                 # Servidor de IA local (porta 3001)
+│   ├── index.js            # POST /chat, GET /health
 │   ├── package.json
+│   ├── .env                # chaves de API (não commitado)
 │   └── .env.example
-├── .env                    # EXPO_PUBLIC_API_URL
+├── .env                    # EXPO_PUBLIC_* (não commitado)
 └── .env.example
 ```
 
@@ -67,85 +98,62 @@ kozzy_mobile/
 
 - Node.js 18+
 - Expo Go no celular (ou emulador)
-- Chave da API [OpenRouter](https://openrouter.ai) (gratuita) e/ou [Google AI Studio](https://aistudio.google.com)
+- Chaves de [Google AI Studio](https://aistudio.google.com) e/ou [OpenRouter](https://openrouter.ai)
 
-### 1. Clone o repositório
+### 1. Clone e instale
 
 ```bash
 git clone https://github.com/MaiconPereira7/kozzy_mobile.git
 cd kozzy_mobile
-```
-
-### 2. Instale as dependências do app
-
-```bash
 npm install
-```
-
-### 3. Instale as dependências do servidor
-
-```bash
 cd server && npm install && cd ..
 ```
 
-### 4. Configure o servidor
+### 2. Configure as variáveis de ambiente
 
-```bash
-cp server/.env.example server/.env
-# Edite server/.env e adicione suas chaves de API
+**Root `.env`** (app mobile):
+```
+EXPO_PUBLIC_API_URL=https://kozzy-backend.onrender.com/api
+EXPO_PUBLIC_AI_SERVER_URL=http://SEU_IP_LOCAL:3001
 ```
 
-### 5. Configure o app
-
-```bash
-cp .env.example .env
-# Edite .env e coloque o IP do seu computador na rede local
-# Exemplo: EXPO_PUBLIC_API_URL=http://192.168.1.100:3000
+**`server/.env`** (servidor de IA):
+```
+GEMINI_API_KEY=sua_chave_aqui
+OPENROUTER_API_KEY=sua_chave_aqui
+PORT=3001
 ```
 
-> **Dica:** Para descobrir o IP do seu PC, rode `ipconfig` (Windows) ou `ifconfig` (Mac/Linux).
+> Para descobrir seu IP local: `ipconfig` (Windows) ou `ifconfig` (Mac/Linux)
 
-### 6. Inicie o servidor
+### 3. Inicie o servidor de IA
 
 ```bash
-cd server && npm start
+npm run server
+# ou: cd server && npm start
 ```
 
-### 7. Inicie o app
+### 4. Inicie o app
 
 ```bash
 npx expo start
 ```
 
-Escaneie o QR code com o Expo Go (Android) ou a câmera (iOS).
+Escaneie o QR code com o Expo Go.
 
-## Contas de Teste
+### 5. Configure o IP no app (se necessário)
 
-| Perfil | E-mail | Senha |
-|--------|--------|-------|
-| Supervisor | supervisor@kozzy.com | 123456 |
-| Cliente | cliente@kozzy.com | 123456 |
+Em **Perfil → Servidor de IA**, coloque `http://SEU_IP:3001` e salve.
 
-## Arquitetura
+## Fluxo do Chat ao Vivo
 
-```
-[Expo App]
-    │
-    ├── src/services/api.ts  ←── AbortController 45s timeout
-    │
-    ▼
-[Express Server :3000]
-    │
-    ├── POST /auth/login|register  ←── bcrypt + JWT
-    ├── POST /chat  ←── recebe histórico das últimas 10 mensagens
-    │       │
-    │       ├── Gemini 2.0 Flash (primário)
-    │       └── OpenRouter free models (fallback com blacklist 10min)
-    │
-    └── GET|POST|PATCH /tickets  ←── MongoDB Atlas (opcional)
-```
-
-O chatbot segue um fluxo de 4 passos para coletar assunto, categoria e descrição antes de emitir o marcador `KOZZY_TICKET:{}`, que o servidor valida e o app transforma em ticket com protocolo.
+1. Cliente toca em **"Falar com Consultor"**
+2. App cria um atendimento no backend (`POST /api/atendimentos`)
+3. Header muda para verde com indicador pulsante
+4. Supervisor recebe notificação via Socket.io no painel web
+5. Mensagens trafegam via `POST /api/atendimentos/:id/comentarios`
+6. Respostas chegam por Socket.io (`chamado:atualizado`) + polling a cada 10s como fallback
+7. Ao encerrar: `avanco → 'encerrado'`, app volta para o bot
 
 ## Autor
 

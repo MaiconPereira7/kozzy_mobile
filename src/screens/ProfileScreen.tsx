@@ -10,7 +10,7 @@ import type { ThemeMode } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import { getInitials } from '../utils/formatters';
-import { getServerUrl, setServerUrl } from '../services/api';
+import { getAIServerUrl, setServerUrl } from '../services/api';
 
 interface FieldRowProps {
   label: string; icon: string; value: string; editable: boolean;
@@ -62,7 +62,7 @@ export default function ProfileScreen() {
   const [tempUser, setTempUser] = useState({ ...(user ?? {}) });
   const [serverUrl, setServerUrlState] = useState('');
 
-  useEffect(() => { setServerUrlState(getServerUrl()); }, []);
+  useEffect(() => { setServerUrlState(getAIServerUrl()); }, []);
 
   const handleSave = () => {
     if (!tempUser.name || !tempUser.email) {
@@ -161,13 +161,13 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SERVIDOR</Text>
-          <Text style={styles.serverLabel}>URL do servidor (IP:porta)</Text>
+          <Text style={styles.serverLabel}>URL do servidor de IA (IP:porta)</Text>
           <View style={styles.serverRow}>
             <TextInput
               style={styles.serverInput}
               value={serverUrl}
               onChangeText={setServerUrlState}
-              placeholder="http://192.168.x.x:3000"
+              placeholder="http://192.168.x.x:3001"
               placeholderTextColor={colors.input.placeholder}
               autoCapitalize="none"
               keyboardType="url"

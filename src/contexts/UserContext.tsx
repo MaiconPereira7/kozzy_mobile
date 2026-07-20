@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { STORAGE_KEYS } from '../constants/storage';
+import { socketService } from '../services/socketService';
+import { getBackendUrl } from '../services/api';
 
 interface User {
   id: string;
@@ -26,13 +28,17 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restaura sessão ao abrir o app
   useEffect(() => {
     const restoreSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER);
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const parsed: User = JSON.parse(storedUser);
+          setUser(parsed);
+          if (parsed.token) {
+            socketService.connect(getBackendUrl(), parsed.token);
+            if (parsed.id) socketService.joinUserRoom(parsed.id);
+          }
         }
       } catch (error) {
         console.error('Erro ao restaurar sessão:', error);
@@ -47,10 +53,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     try {
       setUser(userData);
       const saves: [string, string][] = [[STORAGE_KEYS.USER, JSON.stringify(userData)]];
-      if (userData.token) {
-        saves.push([STORAGE_KEYS.TOKEN, userData.token]);
-      }
+      if (userData.token) saves.push([STORAGE_KEYS.TOKEN, userData.token]);
       await AsyncStorage.multiSet(saves);
+
+      if (userData.token) {
+        socketService.connect(getBackendUrl(), userData.token);
+        if (userData.id) socketService.joinUserRoom(userData.id);
+      }
     } catch (error) {
       console.error('Erro ao salvar dados de login:', error);
     }
@@ -58,10 +67,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
+      socketService.disconnect();
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.TOKEN,
         STORAGE_KEYS.USER,
-        STORAGE_KEYS.CHAT_HISTORY, // limpa o histórico do chat ao sair
+        STORAGE_KEYS.CHAT_HISTORY,
       ]);
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
@@ -74,13 +84,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setUser(prev => {
       if (!prev) return prev;
       const updated = { ...prev, ...userData };
-      // Persiste a atualização
       AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updated)).catch(console.error);
       return updated;
     });
   };
 
-  // Splash enquanto verifica sessão salva
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>

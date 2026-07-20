@@ -10,7 +10,7 @@ export type QuickAction = {
   icon: any;
   color: string;
   bg: string;
-  action: 'navigate' | 'message';
+  action: 'navigate' | 'message' | 'live';
   target?: keyof AppDrawerParamList;
   message?: string;
 };
@@ -19,7 +19,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Abrir Ticket',       icon: 'ticket-outline',  color: '#E01E26', bg: '#FFF0F0', action: 'navigate', target: 'AbrirTicket' },
   { label: 'Meus Tickets',       icon: 'list-outline',    color: '#3B82F6', bg: '#EFF6FF', action: 'navigate', target: 'MeusTickets' },
   { label: 'Status do Pedido',   icon: 'cube-outline',    color: '#F59E0B', bg: '#FFFBEB', action: 'message',  message: 'Quero saber o status do meu pedido.' },
-  { label: 'Falar com Consultor',icon: 'headset-outline', color: '#10B981', bg: '#ECFDF5', action: 'message',  message: 'Gostaria de falar com um consultor humano.' },
+  { label: 'Falar com Consultor',icon: 'headset-outline', color: '#10B981', bg: '#ECFDF5', action: 'live' },
 ];
 
 interface Props {

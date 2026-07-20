@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useUser } from '../contexts/UserContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { apiLogin } from '../services/api';
+import { authService } from '../services/authService';
 import { BORDER_RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '../theme';
 import type { Colors } from '../theme/colors';
 import type { RootNavigationProp } from '../types/navigation';
@@ -34,8 +34,8 @@ const LoginScreen = () => {
 
     setLoading(true);
     try {
-      const { user: apiUser, token } = await apiLogin(email.trim(), password);
-      await login({ ...apiUser, token });
+      const userData = await authService.login(email.trim(), password);
+      await login(userData);
       navigation.replace('App');
     } catch (error: any) {
       const msg = error?.code === 401
@@ -110,9 +110,7 @@ const LoginScreen = () => {
         </View>
 
         <Text style={styles.footer}>Kozzy Alimentos © 2025</Text>
-        <Text style={styles.hint}>
-          Supervisor: supervisor@kozzy.com / 123456{'\n'}Cliente: cliente@kozzy.com / 123456
-        </Text>
+        <Text style={styles.hint}>Use sua conta cadastrada no sistema Kozzy</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

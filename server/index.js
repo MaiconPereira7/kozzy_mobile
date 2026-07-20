@@ -1,127 +1,13 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const OpenAI = require('openai');
-const mongoose = require('mongoose');
-const authRoutes = require('./routes/auth');
-const { optionalAuth } = require('./middleware/auth');
+const cors    = require('cors');
+const OpenAI  = require('openai');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-app.use('/auth', authRoutes);
-
-// ─── MongoDB ──────────────────────────────────────────────────────────────────
-
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI || MONGODB_URI.includes('<db_password>')) {
-  console.warn('⚠️  MONGODB_URI não configurada ou com placeholder — rodando sem banco de dados');
-} else {
-  mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ MongoDB conectado'))
-    .catch(err => console.error('❌ Erro ao conectar MongoDB:', err.message));
-}
-
-const ticketSchema = new mongoose.Schema({
-  protocol:    { type: String, required: true, unique: true },
-  name:        { type: String, required: true },
-  subject:     { type: String, required: true },
-  category:    { type: String, required: true },
-  description: { type: String, required: true },
-  status:      { type: String, default: 'open', enum: ['open', 'inProgress', 'closed'] },
-  priority:    { type: String, default: 'medium', enum: ['low', 'medium', 'high', 'critical'] },
-  clientType:  { type: String, default: 'retail' },
-  responses:   [{ id: String, text: String, author: String, authorRole: String, createdAt: String }],
-  rating:      { stars: Number, comment: String },
-  createdAt:   { type: String, default: () => new Date().toISOString() },
-  updatedAt:   { type: String, default: () => new Date().toISOString() },
-});
-
-const TicketModel = mongoose.model('Ticket', ticketSchema);
-const dbReady = () => mongoose.connection.readyState === 1;
-
-// ─── Endpoints de Tickets ─────────────────────────────────────────────────────
-
-function generateProtocol() {
-  return `KZY${Date.now().toString().slice(-6)}`;
-}
-
-app.get('/tickets', async (_req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    res.json(await TicketModel.find().sort({ createdAt: -1 }).lean());
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.get('/tickets/mine/:name', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    res.json(await TicketModel.find({ name: req.params.name }).sort({ createdAt: -1 }).lean());
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.post('/tickets', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    const { name, subject, category, description, clientType, priority } = req.body;
-    if (!name || !subject || !category || !description) {
-      return res.status(400).json({ message: 'Campos obrigatórios faltando' });
-    }
-    const ticket = await TicketModel.create({
-      protocol: generateProtocol(), name, subject, category, description,
-      clientType: clientType ?? 'retail', priority: priority ?? 'medium',
-    });
-    console.log(`🎫 Ticket criado: ${ticket.protocol} — ${subject}`);
-    res.status(201).json(ticket);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.patch('/tickets/:id/response', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    const { text, author, authorRole } = req.body;
-    const ticket = await TicketModel.findByIdAndUpdate(
-      req.params.id,
-      { $push: { responses: { id: `r_${Date.now()}`, text, author: author ?? 'Suporte', authorRole: authorRole ?? 'supervisor', createdAt: new Date().toISOString() } }, $set: { status: 'inProgress', updatedAt: new Date().toISOString() } },
-      { new: true }
-    );
-    if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
-    res.json(ticket);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.patch('/tickets/:id/priority', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { priority: req.body.priority, updatedAt: new Date().toISOString() } }, { new: true });
-    if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
-    res.json(ticket);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.patch('/tickets/:id/status', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { status: req.body.status, updatedAt: new Date().toISOString() } }, { new: true });
-    if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
-    res.json(ticket);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.patch('/tickets/:id/rate', async (req, res) => {
-  if (!dbReady()) return res.status(503).json({ message: 'Banco de dados não disponível' });
-  try {
-    const { stars, comment } = req.body;
-    const ticket = await TicketModel.findByIdAndUpdate(req.params.id, { $set: { rating: { stars, comment }, status: 'closed', updatedAt: new Date().toISOString() } }, { new: true });
-    if (!ticket) return res.status(404).json({ message: 'Ticket não encontrado' });
-    res.json(ticket);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-// ─── IA ───────────────────────────────────────────────────────────────────────
+// ─── Clientes de IA ───────────────────────────────────────────────────────────
 
 const GEMINI_API_KEY     = process.env.GEMINI_API_KEY;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -145,28 +31,7 @@ if (!geminiClient && !openrouterClient) {
 if (geminiClient)     console.log('🤖 Gemini configurado como IA primária');
 if (openrouterClient) console.log('🔄 OpenRouter configurado como fallback');
 
-const VALID_CATEGORIES = ['Entrega', 'Faturamento', 'Produto', 'Comercial', 'Suporte TI', 'Outro'];
-
-const SYSTEM_PROMPT = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. Responda SEMPRE em português brasileiro.
-
-FLUXO OBRIGATÓRIO para abrir um chamado:
-Passo 1 — Pergunte: "Qual é o assunto do problema?" (se o cliente não disse)
-Passo 2 — Pergunte: "Em qual categoria se encaixa? Entrega / Faturamento / Produto / Comercial / Suporte TI / Outro"
-Passo 3 — Pergunte: "Pode descrever o problema com mais detalhes?"
-Passo 4 — Somente depois de ter as 3 respostas, emita o KOZZY_TICKET.
-
-REGRAS RÍGIDAS:
-- Se o cliente disse APENAS "quero abrir chamado" ou similar, faça o Passo 1. NÃO crie ticket ainda.
-- Só emita KOZZY_TICKET quando tiver ASSUNTO real + CATEGORIA válida + DESCRIÇÃO com detalhes.
-- ASSUNTO deve ter no mínimo 5 palavras descrevendo o problema.
-- CATEGORIA deve ser exatamente uma de: Entrega, Faturamento, Produto, Comercial, Suporte TI, Outro.
-- DESCRIÇÃO deve ter no mínimo 15 palavras com detalhes do problema.
-- Nunca invente informações; use só o que o cliente disse.
-- Para perguntas gerais sem problema, responda normalmente sem criar ticket.
-
-FORMATO do ticket (use {} nunca []):
-KOZZY_TICKET:{"subject":"Produto com defeito na embalagem","category":"Produto","description":"Recebi o lote 882 com embalagens amassadas e o produto vazando."}
-Mensagem amigável confirmando o registro.`;
+// ─── Modelos OpenRouter ───────────────────────────────────────────────────────
 
 const PREFERRED = [
   'mistralai/mistral-7b-instruct:free',
@@ -216,7 +81,7 @@ async function loadModels() {
     const freeIds = (data ?? []).filter(m => m.id.endsWith(':free') && isChatModel(m.id)).map(m => m.id);
     const freeSet = new Set(freeIds);
     const preferred = PREFERRED.filter(m => freeSet.has(m));
-    const others = freeIds.filter(m => !PREFERRED.includes(m));
+    const others    = freeIds.filter(m => !PREFERRED.includes(m));
     models = [...preferred, ...others];
     modelIdx = 0;
     console.log(`✅ ${models.length} modelos de chat gratuitos encontrados`);
@@ -228,7 +93,7 @@ async function loadModels() {
 }
 
 async function callAI(messages) {
-  // ── 1. Gemini (primário) ──────────────────────────────────────────────────
+  // 1. Gemini (primário)
   if (geminiClient) {
     for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash']) {
       try {
@@ -243,7 +108,7 @@ async function callAI(messages) {
     }
   }
 
-  // ── 2. OpenRouter (fallback) ──────────────────────────────────────────────
+  // 2. OpenRouter (fallback)
   if (!openrouterClient) throw new Error('Nenhum provedor de IA disponível.');
   if (models.length === 0) await loadModels();
 
@@ -271,15 +136,41 @@ async function callAI(messages) {
   throw new Error('Todos os modelos disponíveis falharam. Tente em alguns minutos.');
 }
 
-app.post('/chat', optionalAuth, async (req, res) => {
+// ─── System Prompt ────────────────────────────────────────────────────────────
+
+const VALID_CATEGORIES = ['Entrega', 'Faturamento', 'Produto', 'Comercial', 'Suporte TI', 'Outro'];
+
+const SYSTEM_PROMPT = `Você é a Kozzy, assistente virtual da Kozzy Alimentos. Responda SEMPRE em português brasileiro.
+
+FLUXO OBRIGATÓRIO para abrir um chamado:
+Passo 1 — Pergunte: "Qual é o assunto do problema?" (se o cliente não disse)
+Passo 2 — Pergunte: "Em qual categoria se encaixa? Entrega / Faturamento / Produto / Comercial / Suporte TI / Outro"
+Passo 3 — Pergunte: "Pode descrever o problema com mais detalhes?"
+Passo 4 — Somente depois de ter as 3 respostas, emita o KOZZY_TICKET.
+
+REGRAS RÍGIDAS:
+- Se o cliente disse APENAS "quero abrir chamado" ou similar, faça o Passo 1. NÃO crie ticket ainda.
+- Só emita KOZZY_TICKET quando tiver ASSUNTO real + CATEGORIA válida + DESCRIÇÃO com detalhes.
+- ASSUNTO deve ter no mínimo 5 palavras descrevendo o problema.
+- CATEGORIA deve ser exatamente uma de: Entrega, Faturamento, Produto, Comercial, Suporte TI, Outro.
+- DESCRIÇÃO deve ter no mínimo 15 palavras com detalhes do problema.
+- Nunca invente informações; use só o que o cliente disse.
+- Para perguntas gerais sem problema, responda normalmente sem criar ticket.
+
+FORMATO do ticket (use {} nunca []):
+KOZZY_TICKET:{"subject":"Produto com defeito na embalagem","category":"Produto","description":"Recebi o lote 882 com embalagens amassadas e o produto vazando."}
+Mensagem amigável confirmando o registro.`;
+
+// ─── Endpoint /chat ───────────────────────────────────────────────────────────
+
+app.post('/chat', async (req, res) => {
   try {
     if (!req.body?.message) return res.status(400).json({ message: 'Mensagem vazia!' });
     const { message, userName = 'Cliente', history = [] } = req.body;
-    const name = req.user?.name ?? userName;
-    console.log(`💬 [${name}]: ${message}`);
+    console.log(`💬 [${userName}]: ${message}`);
 
     const messages = [
-      { role: 'system', content: `${SYSTEM_PROMPT}\nO cliente se chama ${name}.` },
+      { role: 'system', content: `${SYSTEM_PROMPT}\nO cliente se chama ${userName}.` },
       ...history,
       { role: 'user', content: message },
     ];
@@ -342,12 +233,13 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     primaryAI: geminiClient ? 'gemini' : 'openrouter',
     fallbackModel: models[modelIdx] ?? 'nenhum',
-    db: dbReady() ? 'connected' : 'disconnected',
   });
 });
 
-const PORT = process.env.PORT ?? 3000;
+// ─── Start ────────────────────────────────────────────────────────────────────
+
+const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, async () => {
-  console.log(`🚀 Servidor Kozzy rodando em http://localhost:${PORT}`);
+  console.log(`🚀 Servidor de IA Kozzy rodando em http://localhost:${PORT}`);
   if (openrouterClient) await loadModels();
 });
